@@ -1,5 +1,8 @@
-from sqlalchemy.orm import declarative_base
+from sqlalchemy import Column, Integer, String
+from .database import Base
 
-Base = declarative_base()
+class User(Base):
+    __tablename__ = "users"
 
-# add tables later
+    id = Column(Integer, primary_key=True)
+    email = Column(String, unique=True, nullable=False, index=True)

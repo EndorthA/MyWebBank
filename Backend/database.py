@@ -1,17 +1,14 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, declarative_base
 
-# IMPORTANT: # Needs to be %23
-# Tdakw2GFHV506#u3B_MY  →  Tdakw2GFHV506%23u3B_MY
-DATABASE_URL = "mysql://root:Tdakw2GFHV506%23u3B_MY@localhost:3307/web_banking"
+DATABASE_URL = "postgresql+psycopg2://webbank:webbank@localhost:5432/webbank"
 
-engine = create_engine(DATABASE_URL, future=True)
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
+)
 
+Base = declarative_base()
