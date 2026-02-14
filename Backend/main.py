@@ -1,11 +1,13 @@
+# Backend/main.py
 from fastapi import FastAPI
-from sqlalchemy import text
-from .database import engine
+
+from .Routers import users, accounts, transactions
+from .Routers import test_db  
 
 app = FastAPI()
 
-@app.get("/health")
-def health():
-    with engine.connect() as conn:
-        conn.execute(text("SELECT 1"))
-    return {"status": "ok"}
+app.include_router(users.router, prefix="/users", tags=["users"])
+app.include_router(accounts.router, prefix="/accounts", tags=["accounts"])
+app.include_router(transactions.router, prefix="/transactions", tags=["transactions"])
+
+app.include_router(test_db.router) 
