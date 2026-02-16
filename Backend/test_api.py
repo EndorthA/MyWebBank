@@ -143,13 +143,13 @@ def test_admin():
 
 
 @pytest.fixture
-def test_account(test_customer):
-    """Create a test account."""
+def test_account(test_user, test_customer):
+    headers = {"Authorization": f"Bearer {test_user['token']}"}
     response = client.post("/accounts", json={
         "customer_id": test_customer["customer_id"],
         "currency": "EUR",
         "card_nr": "1234567890123456"
-    })
+    }, headers=headers)
     assert response.status_code == 201
     return response.json()
 
