@@ -14,7 +14,6 @@ from .database import Base
 class UserRole(str, enum.Enum):
     """Roles for regular users (customers)."""
     customer = "customer"
-    premium_customer = "premium_customer"
 
 
 class AdminRole(str, enum.Enum):

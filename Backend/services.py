@@ -48,24 +48,6 @@ class CustomerService:
         except Exception as e:
             db.rollback()
             raise BadRequestError(f"Failed to create customer and user: {str(e)}")
-    
-    @staticmethod
-    def upgrade_to_premium(db: Session, customer_id: int) -> models.Customer:
-        """Upgrade customer to premium tier."""
-        customer = crud.get_customer(db, customer_id)
-        if not customer:
-            raise NotFoundError("Customer not found")
-        
-        user = db.query(models.User).filter(
-            models.User.customer_id == customer_id
-        ).first()
-        
-        if user:
-            user.role = models.UserRole.premium_customer.value
-            db.commit()
-            db.refresh(user)
-        
-        return customer
 
 
 class AccountService:

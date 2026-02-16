@@ -42,7 +42,7 @@ class UserCreate(BaseModel):
     customer_id: int
     email: Optional[EmailStr] = None
     phone: Optional[str] = Field(default=None, max_length=20)
-    role: Optional[str] = Field(default="customer", description="User role (customer or premium_customer)")
+    role: Optional[str] = Field(default="customer", description="User role (customer)")
     # Plain password comes from client; you will hash it in security.py / crud.py
     password: str = Field(min_length=6, max_length=128)
 
