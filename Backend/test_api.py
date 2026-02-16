@@ -89,28 +89,57 @@ def test_customer():
 
 @pytest.fixture
 def test_user(test_customer):
-    """Create a test user."""
-    response = client.post("/users", json={
+    """Create a test user and return with token."""
+    # Register user
+    response = client.post("/auth/register", params={"customer_id": test_customer["customer_id"]}, json={
         "customer_id": test_customer["customer_id"],
         "email": "testuser@example.com",
         "phone": "1234567890",
         "password": "SecurePassword123"
     })
     assert response.status_code == 201
-    return response.json()
+    user_data = response.json()
+    
+    # Login and get token
+    login_response = client.post("/auth/login", json={
+        "email": "testuser@example.com",
+        "password": "SecurePassword123"
+    })
+    assert login_response.status_code == 200
+    token_data = login_response.json()
+    
+    return {
+        "user": user_data,
+        "token": token_data["access_token"]
+    }
 
 
 @pytest.fixture
 def test_admin():
-    """Create a test admin."""
+    """Create a test admin and return with token."""
+    # Create admin
     response = client.post("/admins", json={
         "username": "testadmin",
         "email": "admin@example.com",
         "phone": "9876543210",
-        "password": "AdminPass123"
+        "password": "AdminPass123",
+        "role": "super_admin"
     })
     assert response.status_code == 201
-    return response.json()
+    admin_data = response.json()
+    
+    # Login and get token
+    login_response = client.post("/auth/admin/login", json={
+        "username": "testadmin",
+        "password": "AdminPass123"
+    })
+    assert login_response.status_code == 200
+    token_data = login_response.json()
+    
+    return {
+        "admin": admin_data,
+        "token": token_data["access_token"]
+    }
 
 
 @pytest.fixture
@@ -183,7 +212,7 @@ class TestCustomers:
 class TestUsers:
     
     def test_create_user(self, test_customer):
-        response = client.post("/users", json={
+        response = client.post("/auth/register", params={"customer_id": test_customer["customer_id"]}, json={
             "customer_id": test_customer["customer_id"],
             "email": "newuser@example.com",
             "phone": "1111111111",
@@ -194,35 +223,13 @@ class TestUsers:
         assert data["email"] == "newuser@example.com"
 
     def test_get_user(self, test_user):
-        response = client.get(f"/users/{test_user['user_id']}")
+        response = client.get(f"/users/{test_user['user']['user_id']}")
         assert response.status_code == 200
         data = response.json()
-        assert data["user_id"] == test_user["user_id"]
-
-    def test_get_user_by_email(self, test_user):
-        response = client.get(f"/users/email/{test_user['email']}")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["email"] == test_user["email"]
-
-    def test_user_login_success(self, test_user):
-        response = client.post("/users/login", json={
-            "email": test_user["email"],
-            "password": "SecurePassword123"
-        })
-        assert response.status_code == 200
-        data = response.json()
-        assert data["user_id"] == test_user["user_id"]
-
-    def test_user_login_wrong_password(self, test_user):
-        response = client.post("/users/login", json={
-            "email": test_user["email"],
-            "password": "WrongPassword"
-        })
-        assert response.status_code == 401
+        assert data["user_id"] == test_user["user"]["user_id"]
 
     def test_deactivate_user(self, test_user):
-        response = client.delete(f"/users/{test_user['user_id']}")
+        response = client.delete(f"/users/{test_user['user']['user_id']}")
         assert response.status_code == 200
         data = response.json()
         assert data["is_deleted"] is True
@@ -239,23 +246,18 @@ class TestAdmins:
             "username": "newadmin",
             "email": "newadmin@example.com",
             "phone": "5555555555",
-            "password": "AdminPassword123"
+            "password": "AdminPassword123",
+            "role": "admin"
         })
         assert response.status_code == 201
         data = response.json()
         assert data["username"] == "newadmin"
 
     def test_get_admin(self, test_admin):
-        response = client.get(f"/admins/{test_admin['admin_id']}")
+        response = client.get(f"/admins/{test_admin['admin']['admin_id']}")
         assert response.status_code == 200
         data = response.json()
-        assert data["admin_id"] == test_admin["admin_id"]
-
-    def test_get_admin_by_username(self, test_admin):
-        response = client.get(f"/admins/username/{test_admin['username']}")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["username"] == test_admin["username"]
+        assert data["admin_id"] == test_admin["admin"]["admin_id"]
 
     def test_list_admins(self, test_admin):
         response = client.get("/admins")
@@ -263,27 +265,90 @@ class TestAdmins:
         data = response.json()
         assert len(data) > 0
 
-    def test_admin_login_success(self, test_admin):
-        response = client.post("/admins/login", json={
-            "username": test_admin["username"],
-            "password": "AdminPass123"
-        })
-        assert response.status_code == 200
-        data = response.json()
-        assert data["admin_id"] == test_admin["admin_id"]
-
-    def test_admin_login_wrong_password(self, test_admin):
-        response = client.post("/admins/login", json={
-            "username": test_admin["username"],
-            "password": "WrongPassword"
-        })
-        assert response.status_code == 401
-
     def test_deactivate_admin(self, test_admin):
-        response = client.delete(f"/admins/{test_admin['admin_id']}")
+        response = client.delete(f"/admins/{test_admin['admin']['admin_id']}")
         assert response.status_code == 200
         data = response.json()
         assert data["is_deleted"] is True
+
+
+# ============================================================
+# Auth Tests
+# ============================================================
+
+class TestAuth:
+    
+    def test_user_login_success(self, test_customer):
+        # Register user
+        client.post("/auth/register", params={"customer_id": test_customer["customer_id"]}, json={
+            "customer_id": test_customer["customer_id"],
+            "email": "auth@example.com",
+            "password": "password123"
+        })
+        
+        # Login
+        response = client.post("/auth/login", json={
+            "email": "auth@example.com",
+            "password": "password123"
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert "access_token" in data
+        assert "refresh_token" in data
+        assert data["token_type"] == "bearer"
+        assert data["expires_in"] > 0
+
+    def test_user_login_wrong_password(self, test_customer):
+        # Register user
+        client.post("/auth/register", params={"customer_id": test_customer["customer_id"]}, json={
+            "customer_id": test_customer["customer_id"],
+            "email": "auth2@example.com",
+            "password": "password123"
+        })
+        
+        # Try login with wrong password
+        response = client.post("/auth/login", json={
+            "email": "auth2@example.com",
+            "password": "wrongpassword"
+        })
+        assert response.status_code == 401
+
+    def test_admin_login_success(self):
+        # Create admin
+        client.post("/admins", json={
+            "username": "authtest",
+            "email": "authtest@example.com",
+            "password": "adminpass123",
+            "role": "super_admin"
+        })
+        
+        # Login
+        response = client.post("/auth/admin/login", json={
+            "username": "authtest",
+            "password": "adminpass123"
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert "access_token" in data
+        assert "refresh_token" in data
+        assert data["token_type"] == "bearer"
+        assert data["expires_in"] > 0
+
+    def test_admin_login_wrong_password(self):
+        # Create admin
+        client.post("/admins", json={
+            "username": "authtest2",
+            "email": "authtest2@example.com",
+            "password": "adminpass123",
+            "role": "admin"
+        })
+        
+        # Try login with wrong password
+        response = client.post("/auth/admin/login", json={
+            "username": "authtest2",
+            "password": "wrongpassword"
+        })
+        assert response.status_code == 401
 
 
 # ============================================================

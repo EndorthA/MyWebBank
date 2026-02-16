@@ -1,7 +1,7 @@
 """add role support to users and admins
 
 Revision ID: 2d7f4b5g9e3h
-Revises: 1b5cc20e2a36
+Revises: 3c01d3681422
 Create Date: 2026-02-16 12:00:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '2d7f4b5g9e3h'
-down_revision: Union[str, Sequence[str], None] = '1b5cc20e2a36'
+down_revision: Union[str, Sequence[str], None] = '3c01d3681422'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
