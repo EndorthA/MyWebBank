@@ -350,6 +350,34 @@ class TestAuth:
         })
         assert response.status_code == 401
 
+    def test_get_user_profile(self, test_user):
+        """Test getting user profile with token."""
+        headers = {"Authorization": f"Bearer {test_user['token']}"}
+        response = client.get("/auth/me", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["email"] == "testuser@example.com"
+        assert data["role"] == "customer"
+
+    def test_get_user_profile_without_token(self):
+        """Test that profile endpoint requires token."""
+        response = client.get("/auth/me")
+        assert response.status_code == 401
+
+    def test_get_admin_profile(self, test_admin):
+        """Test getting admin profile with token."""
+        headers = {"Authorization": f"Bearer {test_admin['token']}"}
+        response = client.get("/auth/admin/me", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["username"] == "testadmin"
+        assert data["role"] == "super_admin"
+
+    def test_get_admin_profile_without_token(self):
+        """Test that admin profile endpoint requires token."""
+        response = client.get("/auth/admin/me")
+        assert response.status_code == 401
+
 
 # ============================================================
 # Account Tests
@@ -357,64 +385,71 @@ class TestAuth:
 
 class TestAccounts:
     
-    def test_create_account(self, test_customer):
+    def test_create_account(self, test_user, test_customer):
+        headers = {"Authorization": f"Bearer {test_user['token']}"}
         response = client.post("/accounts", json={
             "customer_id": test_customer["customer_id"],
             "currency": "EUR",
             "card_nr": "1111111111111111"
-        })
+        }, headers=headers)
         assert response.status_code == 201
         data = response.json()
         assert data["currency"] == "EUR"
         assert float(data["balance"]) == 0
 
-    def test_get_account(self, test_account):
-        response = client.get(f"/accounts/{test_account['account_id']}")
+    def test_get_account(self, test_user, test_account):
+        headers = {"Authorization": f"Bearer {test_user['token']}"}
+        response = client.get(f"/accounts/{test_account['account_id']}", headers=headers)
         assert response.status_code == 200
         data = response.json()
         assert data["account_id"] == test_account["account_id"]
 
-    def test_list_accounts_for_customer(self, test_account, test_customer):
-        response = client.get(f"/accounts/customer/{test_customer['customer_id']}")
+    def test_list_accounts_for_customer(self, test_user, test_account, test_customer):
+        headers = {"Authorization": f"Bearer {test_user['token']}"}
+        response = client.get(f"/accounts/customer/{test_customer['customer_id']}", headers=headers)
         assert response.status_code == 200
         data = response.json()
         assert len(data) > 0
 
-    def test_deposit(self, test_account):
+    def test_deposit(self, test_user, test_account):
+        headers = {"Authorization": f"Bearer {test_user['token']}"}
         response = client.post(f"/accounts/{test_account['account_id']}/deposit", json={
             "amount": 1000.50,
             "currency": "EUR"
-        })
+        }, headers=headers)
         assert response.status_code == 200
         data = response.json()
         assert float(data["balance"]) == 1000.50
 
-    def test_withdraw_success(self, test_account):
+    def test_withdraw_success(self, test_user, test_account):
+        headers = {"Authorization": f"Bearer {test_user['token']}"}
         # First deposit
         client.post(f"/accounts/{test_account['account_id']}/deposit", json={
             "amount": 500,
             "currency": "EUR"
-        })
+        }, headers=headers)
         # Then withdraw
         response = client.post(f"/accounts/{test_account['account_id']}/withdraw", json={
             "amount": 200,
             "currency": "EUR"
-        })
+        }, headers=headers)
         assert response.status_code == 200
         data = response.json()
         assert float(data["balance"]) == 300
 
-    def test_withdraw_insufficient_funds(self, test_account):
+    def test_withdraw_insufficient_funds(self, test_user, test_account):
+        headers = {"Authorization": f"Bearer {test_user['token']}"}
         response = client.post(f"/accounts/{test_account['account_id']}/withdraw", json={
             "amount": 1000,
             "currency": "EUR"
-        })
+        }, headers=headers)
         assert response.status_code == 400
 
-    def test_update_account_status(self, test_account):
+    def test_update_account_status(self, test_user, test_account):
+        headers = {"Authorization": f"Bearer {test_user['token']}"}
         response = client.put(f"/accounts/{test_account['account_id']}/status", json={
             "status_value": "frozen"
-        })
+        }, headers=headers)
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "frozen"
@@ -426,22 +461,23 @@ class TestAccounts:
 
 class TestTransactions:
     
-    def test_create_transaction(self, test_customer):
+    def test_create_transaction(self, test_user, test_customer):
+        headers = {"Authorization": f"Bearer {test_user['token']}"}
         # Create two accounts
         acc1 = client.post("/accounts", json={
             "customer_id": test_customer["customer_id"],
             "currency": "EUR"
-        }).json()
+        }, headers=headers).json()
         acc2 = client.post("/accounts", json={
             "customer_id": test_customer["customer_id"],
             "currency": "EUR"
-        }).json()
+        }, headers=headers).json()
         
         # Deposit money in first account
         client.post(f"/accounts/{acc1['account_id']}/deposit", json={
             "amount": 1000,
             "currency": "EUR"
-        })
+        }, headers=headers)
         
         # Create transaction
         response = client.post("/transactions", json={
@@ -450,27 +486,29 @@ class TestTransactions:
             "amount": 500,
             "currency": "EUR",
             "comment": "Test transfer"
-        })
+        }, headers=headers)
         assert response.status_code == 201
         data = response.json()
         assert float(data["amount"]) == 500
         assert data["status"] == "completed"
 
-    def test_get_transaction(self, test_customer):
+
+    def test_get_transaction(self, test_user, test_customer):
+        headers = {"Authorization": f"Bearer {test_user['token']}"}
         # Setup accounts
         acc1 = client.post("/accounts", json={
             "customer_id": test_customer["customer_id"],
             "currency": "EUR"
-        }).json()
+        }, headers=headers).json()
         acc2 = client.post("/accounts", json={
             "customer_id": test_customer["customer_id"],
             "currency": "EUR"
-        }).json()
+        }, headers=headers).json()
         
         client.post(f"/accounts/{acc1['account_id']}/deposit", json={
             "amount": 1000,
             "currency": "EUR"
-        })
+        }, headers=headers)
         
         # Create transaction
         tx = client.post("/transactions", json={
@@ -478,39 +516,40 @@ class TestTransactions:
             "receiver_account_id": acc2["account_id"],
             "amount": 500,
             "currency": "EUR"
-        }).json()
+        }, headers=headers).json()
         
         # Get transaction
-        response = client.get(f"/transactions/{tx['transaction_id']}")
+        response = client.get(f"/transactions/{tx['transaction_id']}", headers=headers)
         assert response.status_code == 200
         data = response.json()
         assert data["transaction_id"] == tx["transaction_id"]
 
-    def test_list_transactions_for_account(self, test_customer):
+    def test_list_transactions_for_account(self, test_user, test_customer):
+        headers = {"Authorization": f"Bearer {test_user['token']}"}
         # Setup accounts
         acc1 = client.post("/accounts", json={
             "customer_id": test_customer["customer_id"],
             "currency": "EUR"
-        }).json()
+        }, headers=headers).json()
         acc2 = client.post("/accounts", json={
             "customer_id": test_customer["customer_id"],
             "currency": "EUR"
-        }).json()
+        }, headers=headers).json()
         
         client.post(f"/accounts/{acc1['account_id']}/deposit", json={
             "amount": 1000,
             "currency": "EUR"
-        })
+        }, headers=headers)
         
         client.post("/transactions", json={
             "sender_account_id": acc1["account_id"],
             "receiver_account_id": acc2["account_id"],
             "amount": 500,
             "currency": "EUR"
-        })
+        }, headers=headers)
         
         # List transactions for account
-        response = client.get(f"/transactions/account/{acc1['account_id']}")
+        response = client.get(f"/transactions/account/{acc1['account_id']}", headers=headers)
         assert response.status_code == 200
         data = response.json()
         assert len(data) > 0
@@ -522,7 +561,22 @@ class TestTransactions:
 
 class TestLoans:
     
-    def test_create_loan(self, test_customer):
+    def test_create_loan(self, test_user, test_customer):
+        headers = {"Authorization": f"Bearer {test_user['token']}"}
+        response = client.post("/loans", json={
+            "customer_id": test_customer["customer_id"],
+            "principal": 10000,
+            "remaining_debt": 10000,
+            "currency": "EUR",
+            "rate_percentage": 5.5
+        }, headers=headers)
+        assert response.status_code == 201
+        data = response.json()
+        assert float(data["principal"]) == 10000
+        assert data["status"] == "active"
+
+    def test_create_loan_without_token(self, test_customer):
+        """Test that creating loan without token returns 401."""
         response = client.post("/loans", json={
             "customer_id": test_customer["customer_id"],
             "principal": 10000,
@@ -530,12 +584,10 @@ class TestLoans:
             "currency": "EUR",
             "rate_percentage": 5.5
         })
-        assert response.status_code == 201
-        data = response.json()
-        assert float(data["principal"]) == 10000
-        assert data["status"] == "active"
+        assert response.status_code == 401
 
-    def test_get_loan(self, test_customer):
+    def test_get_loan(self, test_user, test_customer):
+        headers = {"Authorization": f"Bearer {test_user['token']}"}
         # Create loan
         loan = client.post("/loans", json={
             "customer_id": test_customer["customer_id"],
@@ -543,29 +595,31 @@ class TestLoans:
             "remaining_debt": 10000,
             "currency": "EUR",
             "rate_percentage": 5.5
-        }).json()
+        }, headers=headers).json()
         
         # Get loan
-        response = client.get(f"/loans/{loan['loan_id']}")
+        response = client.get(f"/loans/{loan['loan_id']}", headers=headers)
         assert response.status_code == 200
         data = response.json()
         assert data["loan_id"] == loan["loan_id"]
 
-    def test_list_loans_for_customer(self, test_customer):
+    def test_list_loans_for_customer(self, test_user, test_customer):
+        headers = {"Authorization": f"Bearer {test_user['token']}"}
         client.post("/loans", json={
             "customer_id": test_customer["customer_id"],
             "principal": 10000,
             "remaining_debt": 10000,
             "currency": "EUR",
             "rate_percentage": 5.5
-        })
+        }, headers=headers)
         
-        response = client.get(f"/loans/customer/{test_customer['customer_id']}")
+        response = client.get(f"/loans/customer/{test_customer['customer_id']}", headers=headers)
         assert response.status_code == 200
         data = response.json()
         assert len(data) > 0
 
-    def test_make_loan_payment(self, test_customer):
+    def test_make_loan_payment(self, test_user, test_customer):
+        headers = {"Authorization": f"Bearer {test_user['token']}"}
         # Create loan
         loan = client.post("/loans", json={
             "customer_id": test_customer["customer_id"],
@@ -573,17 +627,18 @@ class TestLoans:
             "remaining_debt": 10000,
             "currency": "EUR",
             "rate_percentage": 5.5
-        }).json()
+        }, headers=headers).json()
         
         # Make payment
         response = client.post(f"/loans/{loan['loan_id']}/payment", json={
             "amount": 2000
-        })
+        }, headers=headers)
         assert response.status_code == 200
         data = response.json()
         assert float(data["remaining_debt"]) == 8000
 
-    def test_make_loan_payment_full(self, test_customer):
+    def test_make_loan_payment_full(self, test_user, test_customer):
+        headers = {"Authorization": f"Bearer {test_user['token']}"}
         # Create loan
         loan = client.post("/loans", json={
             "customer_id": test_customer["customer_id"],
@@ -591,12 +646,12 @@ class TestLoans:
             "remaining_debt": 10000,
             "currency": "EUR",
             "rate_percentage": 5.5
-        }).json()
+        }, headers=headers).json()
         
         # Pay off full debt
         response = client.post(f"/loans/{loan['loan_id']}/payment", json={
             "amount": 10000
-        })
+        }, headers=headers)
         assert response.status_code == 200
         data = response.json()
         assert float(data["remaining_debt"]) == 0

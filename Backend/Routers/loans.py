@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from .. import crud, schemas
 from ..crud import NotFoundError, BadRequestError
+from .auth import get_current_user
 
 
 router = APIRouter(prefix="/loans", tags=["loans"])
@@ -20,7 +21,11 @@ class LoanPaymentRequest(BaseModel):
 # Create Loan
 # ============================================================
 @router.post("/", response_model=schemas.LoanOut, status_code=status.HTTP_201_CREATED)
-def create_loan(data: schemas.LoanCreate, db: Session = Depends(get_db)):
+def create_loan(
+    data: schemas.LoanCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
     """Create a new loan for a customer."""
     try:
         loan = crud.create_loan(db, data)
@@ -35,7 +40,11 @@ def create_loan(data: schemas.LoanCreate, db: Session = Depends(get_db)):
 # Get Loan by ID
 # ============================================================
 @router.get("/{loan_id}", response_model=schemas.LoanOut)
-def get_loan(loan_id: int, db: Session = Depends(get_db)):
+def get_loan(
+    loan_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
     """Get loan details by loan ID."""
     loan = crud.get_loan(db, loan_id)
     if not loan:
@@ -47,7 +56,11 @@ def get_loan(loan_id: int, db: Session = Depends(get_db)):
 # List Loans for Customer
 # ============================================================
 @router.get("/customer/{customer_id}")
-def list_loans_for_customer(customer_id: int, db: Session = Depends(get_db)):
+def list_loans_for_customer(
+    customer_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
     """List all loans for a specific customer."""
     loans = crud.list_loans_for_customer(db, customer_id)
     return [schemas.LoanOut.model_validate(loan) for loan in loans]
@@ -60,7 +73,8 @@ def list_loans_for_customer(customer_id: int, db: Session = Depends(get_db)):
 def make_loan_payment(
     loan_id: int,
     data: LoanPaymentRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     """Make a payment towards a loan."""
     try:
