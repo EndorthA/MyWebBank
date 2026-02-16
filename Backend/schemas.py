@@ -3,7 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 # ----------------------------
@@ -20,6 +20,8 @@ class CustomerCreate(BaseModel):
 
 
 class CustomerOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     customer_id: int
     identity_card_num: str
     afm: str
@@ -32,9 +34,6 @@ class CustomerOut(BaseModel):
     is_deleted: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True  # Pydantic v2 (works fine in v1 too as "orm_mode" alternative)
-
 
 # ----------------------------
 # User
@@ -43,22 +42,27 @@ class UserCreate(BaseModel):
     customer_id: int
     email: Optional[EmailStr] = None
     phone: Optional[str] = Field(default=None, max_length=20)
-
+    role: Optional[str] = Field(default="customer", description="User role (customer or premium_customer)")
     # Plain password comes from client; you will hash it in security.py / crud.py
     password: str = Field(min_length=6, max_length=128)
 
 
 class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     user_id: int
     customer_id: int
     email: Optional[EmailStr]
     phone: Optional[str]
+    role: str
     failed_login_count: int
     is_deleted: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=6, max_length=128)
 
 
 # ----------------------------
@@ -68,20 +72,36 @@ class AdminCreate(BaseModel):
     username: str = Field(min_length=3, max_length=50)
     email: EmailStr
     phone: Optional[str] = Field(default=None, max_length=20)
+    role: Optional[str] = Field(default="admin", description="Admin role (admin, super_admin, or support_agent)")
     password: str = Field(min_length=8, max_length=128)
 
 
 class AdminOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     admin_id: int
     username: str
     email: EmailStr
     phone: Optional[str]
+    role: str
     failed_login_count: int
     is_deleted: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+
+class AdminLogin(BaseModel):
+    username: str = Field(min_length=3, max_length=50)
+    password: str = Field(min_length=8, max_length=128)
+
+
+# ----------------------------
+# Auth Response
+# ----------------------------
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: Optional[str] = None
+    token_type: str = "bearer"
+    expires_in: int
 
 
 # ----------------------------
@@ -94,6 +114,8 @@ class AccountCreate(BaseModel):
 
 
 class AccountOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     account_id: int
     customer_id: int
     card_nr: Optional[str]
@@ -101,9 +123,6 @@ class AccountOut(BaseModel):
     balance: Decimal
     status: str
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # ----------------------------
@@ -119,6 +138,8 @@ class TransactionCreate(BaseModel):
 
 
 class TransactionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     transaction_id: int
     sender_account_id: int
     receiver_account_id: int
@@ -129,9 +150,6 @@ class TransactionOut(BaseModel):
     status: str
     created_at: datetime
     executed_at: Optional[datetime]
-
-    class Config:
-        from_attributes = True
 
 
 # ----------------------------
@@ -146,6 +164,8 @@ class LoanCreate(BaseModel):
 
 
 class LoanOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     loan_id: int
     customer_id: int
     principal: Decimal
@@ -154,6 +174,3 @@ class LoanOut(BaseModel):
     rate_percentage: Decimal
     status: str
     created_at: datetime
-
-    class Config:
-        from_attributes = True

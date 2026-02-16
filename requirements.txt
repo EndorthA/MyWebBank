@@ -5,3 +5,8 @@ pydantic
 psycopg2-binary
 alembic
 python-dotenv
+pytest
+httpx
+pytest-asyncio
+email-validator
+PyJWT

@@ -11,6 +11,19 @@ from .database import Base
 
 
 # ---------- Enums (stored as TEXT/ENUM in Postgres) ----------
+class UserRole(str, enum.Enum):
+    """Roles for regular users (customers)."""
+    customer = "customer"
+    premium_customer = "premium_customer"
+
+
+class AdminRole(str, enum.Enum):
+    """Roles for admin users."""
+    admin = "admin"
+    super_admin = "super_admin"
+    support_agent = "support_agent"
+
+
 class AccountStatus(str, enum.Enum):
     active = "active"
     closed = "closed"
@@ -64,6 +77,7 @@ class User(Base):
 
     password_hash = Column(String(255), nullable=False)  # DO NOT store plaintext
     failed_login_count = Column(Integer, nullable=False, server_default="0")
+    role = Column(Enum(UserRole), nullable=False, server_default=UserRole.customer.value)
     is_deleted = Column(Boolean, nullable=False, server_default="false")
 
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
@@ -82,6 +96,7 @@ class Admin(Base):
 
     password_hash = Column(String(255), nullable=False)
     failed_login_count = Column(Integer, nullable=False, server_default="0")
+    role = Column(Enum(AdminRole), nullable=False, server_default=AdminRole.admin.value)
     is_deleted = Column(Boolean, nullable=False, server_default="false")
 
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
