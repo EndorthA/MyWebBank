@@ -9,9 +9,9 @@ const email = ref('')
 const password = ref('')
 const error = ref('')
 
-function doLogin() {
+async function doLogin() {
   error.value = ''
-  const res = login(email.value.trim(), password.value)
+  const res = await login(email.value.trim(), password.value)
   if (!res.ok) {
     error.value = res.message
     return
@@ -19,9 +19,9 @@ function doLogin() {
   router.push(res.role === 'admin' ? '/admin' : '/user')
 }
 
-function doCreateAccount() {
+async function doCreateAccount() {
   error.value = ''
-  const res = createUser(email.value.trim(), password.value)
+  const res = await createUser(email.value.trim(), password.value)
   if (!res.ok) {
     error.value = res.message
     return

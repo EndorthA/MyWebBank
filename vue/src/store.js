@@ -1,5 +1,6 @@
 // src/store.js
 import { ref, watch } from 'vue'
+import api from './api.js'
 
 // -------------------- Persistence helpers --------------------
 function load(key, fallback) {
@@ -92,19 +93,31 @@ export function findUserByEmail(email) {
 }
 
 // -------------------- Auth --------------------
-export function login(email, password) {
+function mapApiUser(user) {
+  return {
+    email: String(user?.email ?? '').trim(),
+    role: user?.role === 'admin' ? 'admin' : 'user',
+  }
+}
+
+export async function login(email, password) {
   const e = String(email ?? '').trim()
   const p = String(password ?? '')
 
-  const u = users.value.find((x) => x.email === e && x.password === p)
-  if (!u) return { ok: false, message: 'Invalid email or password' }
+  if (!e || !p) return { ok: false, message: 'Email and password required' }
 
-  if (u.status === 'frozen') {
-    return { ok: false, message: 'This user is frozen. Contact admin.' }
+  try {
+    const { data } = await api.post('/auth/login', { email: e, password: p })
+    localStorage.setItem('access_token', data.access_token)
+    currentUser.value = { email: e, role: 'user' }
+    return { ok: true, role: 'user' }
+  } catch (error) {
+    localStorage.removeItem('access_token')
+    return {
+      ok: false,
+      message: error?.response?.data?.detail || 'Invalid email or password',
+    }
   }
-
-  currentUser.value = { email: u.email, role: u.role }
-  return { ok: true, role: u.role }
 }
 
 export function loginAsTest(role) {
@@ -116,19 +129,70 @@ export function loginAsTest(role) {
 }
 
 export function logout() {
+  localStorage.removeItem('access_token')
   currentUser.value = null
 }
 
-export function createUser(email, password) {
+export async function createUser(email, password) {
   const e = String(email ?? '').trim()
   const p = String(password ?? '')
 
   if (!e || !p) return { ok: false, message: 'Email and password required' }
-  if (users.value.some((u) => u.email === e)) return { ok: false, message: 'Email already exists' }
 
-  users.value.push({ email: e, password: p, role: 'user', status: 'active' })
-  currentUser.value = { email: e, role: 'user' }
-  return { ok: true }
+  try {
+    await api.get(`/users/email/${encodeURIComponent(e)}`)
+    return { ok: false, message: 'Email already exists' }
+  } catch (error) {
+    if (error?.response?.status && error.response.status !== 404) {
+      return {
+        ok: false,
+        message: error?.response?.data?.detail || 'Could not check existing users',
+      }
+    }
+  }
+
+  let customers
+  try {
+    customers = await api.get('/customers')
+  } catch (error) {
+    return {
+      ok: false,
+      message: error?.response?.data?.detail || 'Could not load customers',
+    }
+  }
+
+  for (const customer of customers.data) {
+    try {
+      const { data } = await api.post(`/auth/register?customer_id=${customer.customer_id}`, {
+        customer_id: customer.customer_id,
+        email: e,
+        password: p,
+        role: 'customer',
+      })
+
+      const mappedUser = mapApiUser(data)
+      users.value.push({ email: mappedUser.email, password: '', role: mappedUser.role, status: 'active' })
+
+      const loginResult = await login(e, p)
+      if (!loginResult.ok) return loginResult
+
+      return { ok: true, role: mappedUser.role }
+    } catch (error) {
+      const message = String(error?.response?.data?.detail || '')
+      const isReusableCustomerFailure =
+        message.includes('already exists') ||
+        message.includes('UNIQUE constraint failed') ||
+        message.includes('duplicate key')
+
+      if (isReusableCustomerFailure) {
+        continue
+      }
+
+      return { ok: false, message: message || 'Could not create user' }
+    }
+  }
+
+  return { ok: false, message: 'No available customer found for a new user' }
 }
 
 // Admin-create user/admin accounts
