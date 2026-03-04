@@ -216,6 +216,33 @@ export async function fetchMyAccounts() {
   }
 }
 
+export async function prepareManageAccount(selectedName) {
+  const name = String(selectedName ?? '').trim()
+  const ownerEmail = String(currentUser.value?.email ?? '').trim()
+  if (!name || !ownerEmail) return { ok: false, message: 'Invalid account selection' }
+
+  const refreshed = await fetchMyAccounts() // API call
+  if (!refreshed.ok) return refreshed
+
+  const exists = accounts.value.some(
+    (a) => a.ownerEmail === ownerEmail && a.name === name
+  )
+  if (!exists) return { ok: false, message: 'Account not found' }
+
+  return { ok: true, name }
+}
+
+export async function exitSession() {
+  try {
+    await api.get('/auth/me')
+  } catch {
+    // ignore
+  } finally {
+    logout()
+  }
+  return { ok: true }
+}
+
 
 // Admin-create user/admin accounts
 export function createAccountWithRole(email, password, role) {

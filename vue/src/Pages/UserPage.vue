@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { accounts, currentUser, logout, createBankAccount } from '../store.js'
+import { accounts, currentUser, createBankAccount, prepareManageAccount, exitSession } from '../store.js'
 
 const router = useRouter()
 
@@ -28,12 +28,15 @@ async function createAccount() {
 }
 
 
-function manageAccount() {
-  if (selectedAccount.value) router.push(`/account/${selectedAccount.value}`)
+async function manageAccount() {
+  const res = await prepareManageAccount(selectedAccount.value)
+  if (!res.ok) return
+  router.push(`/account/${res.name}`)
 }
 
-function exitApp() {
-  logout()
+
+async function exitApp() {
+  await exitSession()
   router.push('/')
 }
 </script>
