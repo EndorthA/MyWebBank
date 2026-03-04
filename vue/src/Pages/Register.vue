@@ -19,9 +19,9 @@ const form = ref({
   password: ''
 })
 
-function createAccount() {
+async function createAccount() {
   error.value = ''
-  const res = registerUser(form.value)
+  const res = await registerUser(form.value)
   if (!res.ok) {
     error.value = res.message
     return

@@ -134,67 +134,6 @@ export function logout() {
   currentUser.value = null
 }
 
-export async function createUser(email, password) {
-  const e = String(email ?? '').trim()
-  const p = String(password ?? '')
-
-  if (!e || !p) return { ok: false, message: 'Email and password required' }
-
-  try {
-    await api.get(`/users/email/${encodeURIComponent(e)}`)
-    return { ok: false, message: 'Email already exists' }
-  } catch (error) {
-    if (error?.response?.status && error.response.status !== 404) {
-      return {
-        ok: false,
-        message: error?.response?.data?.detail || 'Could not check existing users',
-      }
-    }
-  }
-
-  let customers
-  try {
-    customers = await api.get('/customers')
-  } catch (error) {
-    return {
-      ok: false,
-      message: error?.response?.data?.detail || 'Could not load customers',
-    }
-  }
-
-  for (const customer of customers.data) {
-    try {
-      const { data } = await api.post(`/auth/register?customer_id=${customer.customer_id}`, {
-        customer_id: customer.customer_id,
-        email: e,
-        password: p,
-        role: 'customer',
-      })
-
-      const mappedUser = mapApiUser(data)
-      users.value.push({ email: mappedUser.email, password: '', role: mappedUser.role, status: 'active' })
-
-      const loginResult = await login(e, p)
-      if (!loginResult.ok) return loginResult
-
-      return { ok: true, role: mappedUser.role }
-    } catch (error) {
-      const message = String(error?.response?.data?.detail || '')
-      const isReusableCustomerFailure =
-        message.includes('already exists') ||
-        message.includes('UNIQUE constraint failed') ||
-        message.includes('duplicate key')
-
-      if (isReusableCustomerFailure) {
-        continue
-      }
-
-      return { ok: false, message: message || 'Could not create user' }
-    }
-  }
-
-  return { ok: false, message: 'No available customer found for a new user' }
-}
 
 // Admin-create user/admin accounts
 export function createAccountWithRole(email, password, role) {
@@ -233,36 +172,96 @@ export function deleteUser(email) {
   return { ok: true }
 }
 
-export function registerUser(profile) {
+export async function registerUser(profile) {
   const email = String(profile?.email ?? '').trim()
   const password = String(profile?.password ?? '')
+  const phone = String(profile?.phone ?? '').trim()
+  const identificationNumber = String(profile?.identificationNumber ?? '').trim()
+  const afm = String(profile?.afm ?? '').trim()
+  const address = String(profile?.address ?? '').trim()
+  const zipCode = String(profile?.zipCode ?? '').trim()
+  const city = String(profile?.city ?? '').trim()
+  const citizenship = String(profile?.citizenship ?? '').trim()
 
   if (!email || !password) return { ok: false, message: 'Email and password required' }
+  if (!identificationNumber) return { ok: false, message: 'Identification number is required' }
+  if (identificationNumber.length > 10) {
+    return { ok: false, message: 'Identification number must be at most 10 characters' }
+  }
+  if (!afm) return { ok: false, message: 'AFM is required' }
+  if (afm.length !== 9) return { ok: false, message: 'AFM must be 9 characters' }
 
-  const exists = users.value.some((u) => u.email === email)
-  if (exists) return { ok: false, message: 'Email already exists' }
-
-  users.value.push({
-    email,
-    password,
-    role: 'user',
-    status: 'active',
-    profile: {
-      name: String(profile?.name ?? ''),
-      phone: String(profile?.phone ?? ''),
-      identificationNumber: String(profile?.identificationNumber ?? ''),
-      afm: String(profile?.afm ?? ''),
-      address: String(profile?.address ?? ''),
-      zipCode: String(profile?.zipCode ?? ''),
-      city: String(profile?.city ?? ''),
-      citizenship: String(profile?.citizenship ?? ''),
+  try {
+    await api.get(`/users/email/${encodeURIComponent(email)}`)
+    return { ok: false, message: 'Email already exists' }
+  } catch (error) {
+    if (error?.response?.status && error.response.status !== 404) {
+      return {
+        ok: false,
+        message: error?.response?.data?.detail || 'Could not check existing users',
+      }
     }
-  })
+  }
 
-  // optional: auto-login after registration
-  currentUser.value = { email, role: 'user' }
+  let customerId
+  try {
+    const { data } = await api.post('/customers/', {
+      identity_card_num: identificationNumber,
+      afm,
+      address: address || null,
+      zip_code: zipCode || null,
+      city: city || null,
+      citizenship: citizenship || null,
+    })
+    customerId = data.customer_id
+  } catch (error) {
+    return {
+      ok: false,
+      message: error?.response?.data?.detail || 'Could not create customer',
+    }
+  }
 
-  return { ok: true }
+  try {
+    const { data } = await api.post(`/auth/register?customer_id=${customerId}`, {
+      customer_id: customerId,
+      email,
+      phone: phone || null,
+      password,
+      role: 'customer',
+    })
+
+    const mappedUser = mapApiUser(data)
+    users.value.push({
+      email: mappedUser.email,
+      password: '',
+      role: mappedUser.role,
+      status: 'active',
+      profile: {
+        name: String(profile?.name ?? ''),
+        phone,
+        identificationNumber,
+        afm,
+        address,
+        zipCode,
+        city,
+        citizenship,
+      }
+    })
+
+    return { ok: true, role: mappedUser.role }
+  } catch (error) {
+    try {
+      // Best-effort rollback if user creation fails after the customer was created.
+      await api.delete(`/customers/${customerId}`)
+    } catch {
+      // Ignore rollback failures and surface the original registration error.
+    }
+
+    return {
+      ok: false,
+      message: error?.response?.data?.detail || 'Could not create user',
+    }
+  }
 }
 
 // -------------------- Test reset --------------------

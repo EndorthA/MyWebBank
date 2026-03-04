@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { login, createUser, loginAsTest, resetAll } from '../store.js'
+import { login, loginAsTest, resetAll } from '../store.js'
 
 const router = useRouter()
 
