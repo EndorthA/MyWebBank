@@ -107,6 +107,7 @@ class Account(Base):
 
     account_id = Column(Integer, primary_key=True)
     customer_id = Column(Integer, ForeignKey("customers.customer_id", ondelete="RESTRICT"), nullable=False)
+    name = Column(String(100), nullable=False)
 
     # If you want to keep card number, store only last4 or tokenized value.
     card_nr = Column(String(16), unique=True)  # optional

@@ -109,6 +109,7 @@ class TokenResponse(BaseModel):
 # ----------------------------
 class AccountCreate(BaseModel):
     customer_id: int
+    name: str = Field(min_length=1, max_length=100) 
     currency: str = Field(min_length=3, max_length=3)  # "EUR"
     card_nr: Optional[str] = Field(default=None, min_length=16, max_length=16)
 
@@ -118,6 +119,7 @@ class AccountOut(BaseModel):
     
     account_id: int
     customer_id: int
+    name: str
     card_nr: Optional[str]
     currency: str
     balance: Decimal

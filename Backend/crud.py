@@ -201,6 +201,7 @@ def authenticate_admin(db: Session, username: str, password: str):
 def create_account(db: Session, data: schemas.AccountCreate):
     account = models.Account(
         customer_id=data.customer_id,
+        name=data.name,
         currency=data.currency.upper(),
         card_nr=data.card_nr,
     )
