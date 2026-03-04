@@ -19,15 +19,6 @@ async function doLogin() {
   router.push(res.role === 'admin' ? '/admin' : '/user')
 }
 
-async function doCreateAccount() {
-  error.value = ''
-  const res = await createUser(email.value.trim(), password.value)
-  if (!res.ok) {
-    error.value = res.message
-    return
-  }
-  router.push('/user')
-}
 
 function testUser() {
   loginAsTest('user')
@@ -37,6 +28,10 @@ function testUser() {
 function testAdmin() {
   loginAsTest('admin')
   router.push('/admin')
+}
+
+function goRegister() {
+  router.push('/register')
 }
 
 function doReset() {
@@ -56,7 +51,9 @@ function doReset() {
       <input v-model="password" type="password" placeholder="Password" />
 
       <button @click="doLogin">Login</button>
-      <button @click="doCreateAccount">Create Account</button>
+
+      <!-- NEW: replace previous method -->
+      <button @click="goRegister">Create Account</button>
 
       <p v-if="error" style="color:#d9534f; margin: 8px 0 0;">
         {{ error }}

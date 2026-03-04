@@ -28,6 +28,7 @@ function normalizeUsers(list) {
         email: String(u?.email ?? '').trim(),
         password: String(u?.password ?? ''),
         role: u?.role === 'admin' ? 'admin' : 'user',
+        profile: u?.profile ?? null,
         status, // active | frozen
       }
     })
@@ -229,6 +230,38 @@ export function deleteUser(email) {
 
   if (currentUser.value?.email === e) currentUser.value = null
   users.value.splice(idx, 1)
+  return { ok: true }
+}
+
+export function registerUser(profile) {
+  const email = String(profile?.email ?? '').trim()
+  const password = String(profile?.password ?? '')
+
+  if (!email || !password) return { ok: false, message: 'Email and password required' }
+
+  const exists = users.value.some((u) => u.email === email)
+  if (exists) return { ok: false, message: 'Email already exists' }
+
+  users.value.push({
+    email,
+    password,
+    role: 'user',
+    status: 'active',
+    profile: {
+      name: String(profile?.name ?? ''),
+      phone: String(profile?.phone ?? ''),
+      identificationNumber: String(profile?.identificationNumber ?? ''),
+      afm: String(profile?.afm ?? ''),
+      address: String(profile?.address ?? ''),
+      zipCode: String(profile?.zipCode ?? ''),
+      city: String(profile?.city ?? ''),
+      citizenship: String(profile?.citizenship ?? ''),
+    }
+  })
+
+  // optional: auto-login after registration
+  currentUser.value = { email, role: 'user' }
+
   return { ok: true }
 }
 

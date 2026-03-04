@@ -1,10 +1,11 @@
 // src/router.js
 import { createRouter, createWebHistory } from 'vue-router'
-
-import Login from './pages/Login.vue'
-import UserPage from './pages/UserPage.vue'
-import AdminPage from './pages/AdminPage.vue'
-import AccountsPage from './pages/AccountsPage.vue'
+// Renamed to Pages instead of pages because typescript is being stupid
+import Login from './Pages/Login.vue'
+import UserPage from './Pages/UserPage.vue'
+import AdminPage from './Pages/AdminPage.vue'
+import AccountsPage from './Pages/AccountsPage.vue'
+import Register from './Pages/Register.vue'
 
 import { currentUser } from './store.js'
 
@@ -12,7 +13,8 @@ const routes = [
   { path: '/', component: Login },
   { path: '/user', component: UserPage, meta: { requiresAuth: true } },
   { path: '/admin', component: AdminPage, meta: { requiresAuth: true, role: 'admin' } },
-  { path: '/account/:name', component: AccountsPage, meta: { requiresAuth: true } }
+  { path: '/account/:name', component: AccountsPage, meta: { requiresAuth: true } },
+  { path: '/register', component: Register }
 ]
 
 const router = createRouter({
