@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { accounts, currentUser, logout } from '../store.js'
+import { accounts, currentUser, logout, createBankAccount } from '../store.js'
 
 const router = useRouter()
 
@@ -18,21 +18,15 @@ const selectedAccountObj = computed(() =>
   myAccounts.value.find(a => a.name === selectedAccount.value) || null
 )
 
-function createAccount() {
+async function createAccount() {
   if (!accountName.value || !currentUser.value?.email) return
 
-  accounts.value.push({
-    name: accountName.value,
-    ownerEmail: currentUser.value.email,
-    currency: currency.value,
-    money: 0,
-    status: 'open',
-    loans: [],
-    transactions: []
-  })
+  const res = await createBankAccount(accountName.value, currency.value)
+  if (!res.ok) return
 
   accountName.value = ''
 }
+
 
 function manageAccount() {
   if (selectedAccount.value) router.push(`/account/${selectedAccount.value}`)

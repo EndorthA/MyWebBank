@@ -111,6 +111,7 @@ export async function login(email, password) {
     const { data } = await api.post('/auth/login', { email: e, password: p })
     localStorage.setItem('access_token', data.access_token)
     currentUser.value = { email: e, role: 'user' }
+    await fetchMyAccounts()
     return { ok: true, role: 'user' }
   } catch (error) {
     localStorage.removeItem('access_token')
@@ -132,6 +133,87 @@ export function loginAsTest(role) {
 export function logout() {
   localStorage.removeItem('access_token')
   currentUser.value = null
+}
+
+// -------------------- Account/Profile functions --------------------
+export async function createBankAccount(name, currency = 'EUR') {
+  const accountName = String(name ?? '').trim()
+  const accountCurrency = String(currency ?? 'EUR').trim().toUpperCase()
+  const ownerEmail = String(currentUser.value?.email ?? '').trim()
+
+  if (!accountName) return { ok: false, message: 'Account name is required' }
+  if (!ownerEmail) return { ok: false, message: 'User not logged in' }
+
+  try {
+    const { data: me } = await api.get('/auth/me')
+    const customerId = me?.customer_id
+    if (!customerId) return { ok: false, message: 'Could not resolve customer' }
+
+    const { data } = await api.post('/accounts/', {
+      customer_id: customerId,
+      name: accountName,
+      currency: accountCurrency,
+    })
+
+    const statusRaw = String(data?.status ?? 'active')
+    const status = statusRaw === 'closed' || statusRaw === 'frozen' ? statusRaw : 'open'
+
+    accounts.value.push({
+      name: accountName,
+      ownerEmail,
+      currency: String(data?.currency ?? accountCurrency),
+      money: toNumber(data?.balance, 0),
+      status,
+      loans: [],
+      transactions: [],
+    })
+    const refresh = await fetchMyAccounts()
+    if (!refresh.ok) return refresh
+    return { ok: true }
+  } catch (error) {
+    return {
+      ok: false,
+      message: error?.response?.data?.detail || 'Could not create account',
+    }
+  }
+}
+
+export async function fetchMyAccounts() {
+  const ownerEmail = String(currentUser.value?.email ?? '').trim()
+  if (!ownerEmail) return { ok: false, message: 'User not logged in' }
+
+  try {
+    const { data: me } = await api.get('/auth/me')
+    const customerId = me?.customer_id
+    if (!customerId) return { ok: false, message: 'Could not resolve customer' }
+
+    const { data } = await api.get(`/accounts/customer/${customerId}`)
+    const mapped = (Array.isArray(data) ? data : []).map((a) => {
+      const statusRaw = String(a?.status ?? 'active')
+      const status = statusRaw === 'closed' || statusRaw === 'frozen' ? statusRaw : 'open'
+      return {
+        name: String(a?.name ?? `Account ${a.account_id}`),
+        ownerEmail,
+        currency: String(a?.currency ?? 'EUR'),
+        money: toNumber(a?.balance, 0),
+        status,
+        loans: [],
+        transactions: [],
+      }
+    })
+
+    accounts.value = [
+      ...accounts.value.filter((a) => a.ownerEmail !== ownerEmail),
+      ...mapped,
+    ]
+
+    return { ok: true }
+  } catch (error) {
+    return {
+      ok: false,
+      message: error?.response?.data?.detail || 'Could not load accounts',
+    }
+  }
 }
 
 

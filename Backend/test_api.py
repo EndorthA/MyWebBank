@@ -147,6 +147,7 @@ def test_account(test_user, test_customer):
     headers = {"Authorization": f"Bearer {test_user['token']}"}
     response = client.post("/accounts", json={
         "customer_id": test_customer["customer_id"],
+        "name": "Fixture Account",
         "currency": "EUR",
         "card_nr": "1234567890123456"
     }, headers=headers)
@@ -389,11 +390,13 @@ class TestAccounts:
         headers = {"Authorization": f"Bearer {test_user['token']}"}
         response = client.post("/accounts", json={
             "customer_id": test_customer["customer_id"],
+            "name": "Main Account",
             "currency": "EUR",
             "card_nr": "1111111111111111"
         }, headers=headers)
         assert response.status_code == 201
         data = response.json()
+        assert data["name"] == "Main Account"
         assert data["currency"] == "EUR"
         assert float(data["balance"]) == 0
 
@@ -466,10 +469,12 @@ class TestTransactions:
         # Create two accounts
         acc1 = client.post("/accounts", json={
             "customer_id": test_customer["customer_id"],
+            "name": "Main Account",
             "currency": "EUR"
         }, headers=headers).json()
         acc2 = client.post("/accounts", json={
             "customer_id": test_customer["customer_id"],
+            "name": "Main Account",
             "currency": "EUR"
         }, headers=headers).json()
         
@@ -498,10 +503,12 @@ class TestTransactions:
         # Setup accounts
         acc1 = client.post("/accounts", json={
             "customer_id": test_customer["customer_id"],
+            "name": "Main Account",
             "currency": "EUR"
         }, headers=headers).json()
         acc2 = client.post("/accounts", json={
             "customer_id": test_customer["customer_id"],
+            "name": "Main Account",
             "currency": "EUR"
         }, headers=headers).json()
         
@@ -529,10 +536,12 @@ class TestTransactions:
         # Setup accounts
         acc1 = client.post("/accounts", json={
             "customer_id": test_customer["customer_id"],
+            "name": "Main Account",
             "currency": "EUR"
         }, headers=headers).json()
         acc2 = client.post("/accounts", json={
             "customer_id": test_customer["customer_id"],
+            "name": "Main Account",
             "currency": "EUR"
         }, headers=headers).json()
         
