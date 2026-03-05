@@ -190,19 +190,28 @@ export async function fetchMyAccounts() {
     if (!customerId) return { ok: false, message: 'Could not resolve customer' }
 
     const { data } = await api.get(`/accounts/customer/${customerId}`)
+
+    const existingTxById = new Map(
+      accounts.value
+        .filter((a) => a.ownerEmail === ownerEmail)
+        .map((a) => [a.accountId, Array.isArray(a.transactions) ? a.transactions : []])
+    )
+
     const mapped = (Array.isArray(data) ? data : []).map((a) => {
+      const accountId = toNumber(a?.account_id, 0)
       const statusRaw = String(a?.status ?? 'active')
       const status = statusRaw === 'closed' || statusRaw === 'frozen' ? statusRaw : 'open'
+
       return {
         name: String(a?.name ?? `Account ${a.account_id}`),
-        accountId: toNumber(a?.account_id, 0),
+        accountId,
         customerId: toNumber(a?.customer_id, 0),
         ownerEmail,
         currency: String(a?.currency ?? 'EUR'),
         money: toNumber(a?.balance, 0),
         status,
         loans: [],
-        transactions: [],
+        transactions: existingTxById.get(accountId) || [],
       }
     })
 
@@ -219,6 +228,7 @@ export async function fetchMyAccounts() {
     }
   }
 }
+
 
 export async function prepareManageAccount(selectedName) {
   const name = String(selectedName ?? '').trim()
@@ -344,18 +354,27 @@ export async function fetchTransactionsByAccountName(name) {
 
   try {
     const { data } = await api.get(`/transactions/account/${acc.accountId}`)
-    const items = (Array.isArray(data) ? data : []).map((t) => ({
+    const apiItems = (Array.isArray(data) ? data : []).map((t) => ({
       id: String(t?.transaction_id ?? ''),
       type: t?.sender_account_id === acc.accountId ? 'TRANSFER_OUT' : 'TRANSFER_IN',
       amount: toNumber(t?.amount, 0),
       note: String(t?.comment ?? ''),
       ts: String(t?.created_at ?? ''),
     }))
+
+    const localItems = (Array.isArray(acc.transactions) ? acc.transactions : [])
+      .filter((t) => t?.type !== 'TRANSFER_OUT' && t?.type !== 'TRANSFER_IN')
+
+    const items = [...apiItems, ...localItems].sort(
+      (a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime()
+    )
+
     return { ok: true, items }
   } catch (error) {
     return { ok: false, message: error?.response?.data?.detail || 'Could not load transactions', items: [] }
   }
 }
+
 
 // Loan functions
 export async function fetchLoansByAccountName(name) {

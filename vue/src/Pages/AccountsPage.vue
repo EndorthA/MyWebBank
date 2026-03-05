@@ -13,10 +13,16 @@ const router = useRouter()
 const accountName = route.params.name
 
 const account = computed(() => {
-  const a = accounts.value.find(acc => acc.name === accountName) || null
-  // optional safety: only owner can view
-  if (a && currentUser.value?.role !== 'admin' && a.ownerEmail !== currentUser.value?.email) return null
-  return a
+  const me = currentUser.value?.email
+  const role = currentUser.value?.role
+
+  return (
+    accounts.value.find(
+      (acc) =>
+        acc.name === accountName &&
+        (role === 'admin' || acc.ownerEmail === me)
+    ) || null
+  )
 })
 
 const isLocked = computed(() => {
@@ -134,7 +140,7 @@ async function addMoney() {
     error.value = res.message
     return
   }
-
+  addTransaction('DEPOSIT', amt, 'Deposit')
   addMoneyAmount.value = ''
   if (showLog.value) await refreshTransactionLog()
 }
@@ -156,7 +162,7 @@ async function withdrawMoney() {
     error.value = res.message
     return
   }
-
+  addTransaction('WITHDRAW', amt, 'Withdraw')
   withdrawAmount.value = ''
   if (showLog.value) await refreshTransactionLog()
 }
@@ -182,11 +188,13 @@ async function requestLoan() {
 
   const res = await requestLoanByAccountName(accountName, nm, amt)
   if (!res.ok) { error.value = res.message; return }
+  addTransaction('LOAN CREATED', amt, `Loan: ${nm}`)
 
   selectedLoanName.value = nm
   loanName.value = ''
   loanAmount.value = ''
   await refreshLoans()
+  if (showLog.value) await refreshTransactionLog()
 }
 
 
@@ -194,10 +202,15 @@ async function payLoan() {
   error.value = ''
   if (!account.value || !selectedLoan.value || isLocked.value) return
 
+  const payAmount = Number(selectedLoan.value.amount)
+  const loanLabel = selectedLoan.value.name  
   const res = await payLoanByAccountName(accountName, selectedLoan.value.loanId, selectedLoan.value.amount)
   if (!res.ok) { error.value = res.message; return }
 
+  addTransaction('LOAN PAID', payAmount, `Loan: ${loanLabel}`)
+
   await refreshLoans()
+  if (showLog.value) await refreshTransactionLog()
 }
 
 
