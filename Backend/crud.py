@@ -353,6 +353,7 @@ def list_transactions_for_account(db: Session, account_id: int):
 def create_loan(db: Session, data: schemas.LoanCreate):
     loan = models.Loan(
         customer_id=data.customer_id,
+        name=data.name,
         principal=data.principal,
         remaining_debt=data.remaining_debt,
         currency=data.currency.upper(),

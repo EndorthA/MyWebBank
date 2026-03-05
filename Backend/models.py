@@ -170,6 +170,7 @@ class Loan(Base):
 
     loan_id = Column(Integer, primary_key=True)
     customer_id = Column(Integer, ForeignKey("customers.customer_id", ondelete="RESTRICT"), nullable=False)
+    name = Column(String(100), nullable=True)
 
     principal = Column(Numeric(14, 2), nullable=False)
     remaining_debt = Column(Numeric(14, 2), nullable=False)

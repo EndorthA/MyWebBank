@@ -159,6 +159,7 @@ class TransactionOut(BaseModel):
 # ----------------------------
 class LoanCreate(BaseModel):
     customer_id: int
+    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     principal: Decimal = Field(gt=0)
     remaining_debt: Decimal = Field(ge=0)
     currency: str = Field(min_length=3, max_length=3)
@@ -170,6 +171,7 @@ class LoanOut(BaseModel):
     
     loan_id: int
     customer_id: int
+    name: Optional[str]
     principal: Decimal
     remaining_debt: Decimal
     currency: str
