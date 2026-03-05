@@ -1,7 +1,12 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { accounts, users, currentUser, fetchMyAccounts, updateAccountStatusByName, depositByName, withdrawByName, transferByNames, fetchTransactionsByAccountName } from '../store.js'
+import {
+  accounts, users, currentUser, fetchMyAccounts, updateAccountStatusByName,
+  depositByName, withdrawByName, transferByNames, fetchTransactionsByAccountName,
+  fetchLoansByAccountName, requestLoanByAccountName, payLoanByAccountName
+} from '../store.js'
+
 
 const route = useRoute()
 const router = useRouter()
@@ -33,6 +38,18 @@ async function refreshTransactionLog() {
   }
   transactionLog.value = res.items
 }
+
+const loans = ref([])
+
+async function refreshLoans() {
+  const res = await fetchLoansByAccountName(accountName)
+  if (!res.ok) {
+    error.value = res.message
+    return
+  }
+  loans.value = res.items
+}
+
 
 async function toggleLog() {
   showLog.value = !showLog.value
@@ -149,42 +166,40 @@ const loanName = ref('')
 const loanAmount = ref('')
 const selectedLoanName = ref('')
 
-const selectedLoan = computed(() => {
-  if (!account.value) return null
-  return account.value.loans.find(l => l.name === selectedLoanName.value) || null
-})
+const selectedLoan = computed(() => loans.value.find(l => l.name === selectedLoanName.value) || null)
+
 
 const loanRemaining = computed(() => selectedLoan.value ? selectedLoan.value.amount : '')
 
-function requestLoan() {
+async function requestLoan() {
   error.value = ''
   if (!account.value || isLocked.value) return
+
   const amt = Number(loanAmount.value)
-  if (!loanName.value.trim()) { error.value = 'Loan name is required.'; return }
+  const nm = loanName.value.trim()
+  if (!nm) { error.value = 'Loan name is required.'; return }
   if (!Number.isFinite(amt) || amt <= 0) { error.value = 'Loan amount must be positive.'; return }
 
-  account.value.loans.push({ name: loanName.value.trim(), amount: amt })
-  account.value.money += amt
+  const res = await requestLoanByAccountName(accountName, nm, amt)
+  if (!res.ok) { error.value = res.message; return }
 
-  selectedLoanName.value = loanName.value.trim()
+  selectedLoanName.value = nm
   loanName.value = ''
   loanAmount.value = ''
-
-  addTransaction('LOAN_CREATED', amt, `Loan: ${selectedLoanName.value}`)
+  await refreshLoans()
 }
 
-function payLoan() {
+
+async function payLoan() {
   error.value = ''
   if (!account.value || !selectedLoan.value || isLocked.value) return
-  const remaining = Number(selectedLoan.value.amount)
-  if (!Number.isFinite(remaining) || remaining <= 0) return
-  if (account.value.money < remaining) { error.value = 'Not enough money to pay this loan.'; return }
 
-  account.value.money -= remaining
-  selectedLoan.value.amount = 0
+  const res = await payLoanByAccountName(accountName, selectedLoan.value.loanId, selectedLoan.value.amount)
+  if (!res.ok) { error.value = res.message; return }
 
-  addTransaction('LOAN_PAID', remaining, `Loan: ${selectedLoanName.value}`)
+  await refreshLoans()
 }
+
 
 // ---------- Transfer ----------
 const transferAmount = ref('')
@@ -240,6 +255,7 @@ function deleteAccount() {
 
 onMounted(async () => {
   await fetchMyAccounts()
+  await refreshLoans()
 })
 
 </script>
@@ -314,7 +330,7 @@ onMounted(async () => {
       <label>Loans</label>
       <select v-model="selectedLoanName" :disabled="isLocked">
         <option disabled value="">Choose a loan</option>
-        <option v-for="loan in account.loans" :key="loan.name" :value="loan.name">{{ loan.name }}</option>
+        <option v-for="loan in loans" :key="loan.loanId" :value="loan.name">{{ loan.name }}</option>
       </select>
 
       <div class="info-box" v-if="selectedLoan">

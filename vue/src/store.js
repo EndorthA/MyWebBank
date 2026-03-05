@@ -357,6 +357,80 @@ export async function fetchTransactionsByAccountName(name) {
   }
 }
 
+// Loan functions
+export async function fetchLoansByAccountName(name) {
+  const acc = findMyAccountByName(name)
+  if (!acc?.customerId) return { ok: false, message: 'Account not found', items: [] }
+
+  try {
+    const { data } = await api.get(`/loans/customer/${acc.customerId}`)
+    const items = (Array.isArray(data) ? data : []).map((l) => ({
+      loanId: Number(l?.loan_id ?? 0),
+      name: String(l?.name ?? `Loan ${l?.loan_id}`),
+      amount: Number(l?.remaining_debt ?? 0),
+      currency: String(l?.currency ?? acc.currency ?? 'EUR'),
+    }))
+    return { ok: true, items }
+  } catch (error) {
+    return { ok: false, message: error?.response?.data?.detail || 'Could not load loans', items: [] }
+  }
+}
+
+export async function requestLoanByAccountName(name, loanName, amount) {
+  const acc = findMyAccountByName(name)
+  const nm = String(loanName ?? '').trim()
+  const amt = Number(amount)
+
+  if (!acc?.accountId || !acc?.customerId) return { ok: false, message: 'Account not found' }
+  if (!nm) return { ok: false, message: 'Loan name is required' }
+  if (!Number.isFinite(amt) || amt <= 0) return { ok: false, message: 'Loan amount must be positive' }
+
+  try {
+    await api.post('/loans/', {
+      customer_id: acc.customerId,
+      name: nm,
+      principal: amt,
+      remaining_debt: amt,
+      currency: String(acc.currency ?? 'EUR').toUpperCase(),
+      rate_percentage: 5.5,
+    })
+
+    await api.post(`/accounts/${acc.accountId}/deposit`, {
+      amount: amt,
+      currency: String(acc.currency ?? 'EUR').toUpperCase(),
+    })
+
+    await fetchMyAccounts()
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, message: error?.response?.data?.detail || 'Could not create loan' }
+  }
+}
+
+export async function payLoanByAccountName(name, loanId, amount) {
+  const acc = findMyAccountByName(name)
+  const lid = Number(loanId)
+  const amt = Number(amount)
+
+  if (!acc?.accountId) return { ok: false, message: 'Account not found' }
+  if (!Number.isFinite(lid) || lid <= 0) return { ok: false, message: 'Loan not found' }
+  if (!Number.isFinite(amt) || amt <= 0) return { ok: false, message: 'Payment amount must be positive' }
+
+  try {
+    await api.post(`/loans/${lid}/payment`, { amount: amt })
+
+    await api.post(`/accounts/${acc.accountId}/withdraw`, {
+      amount: amt,
+      currency: String(acc.currency ?? 'EUR').toUpperCase(),
+    })
+
+    await fetchMyAccounts()
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, message: error?.response?.data?.detail || 'Could not pay loan' }
+  }
+}
+
 
 // Admin-create user/admin accounts
 export function createAccountWithRole(email, password, role) {
