@@ -40,7 +40,7 @@ function closeModal() {
 }
 
 async function refreshAvailableUsers() {
-  const res = await fetchTransferRecipientEmails()
+  const res = await fetchTransferRecipientEmails({ includeDeleted: true, includeSelf: true })
   if (!res.ok) {
     searchError.value = res.message || 'Could not load users.'
     availableUsers.value = []
@@ -136,7 +136,7 @@ onMounted(async () => {
       </select>
 
       <button @click="openUser">
-        Search
+        Modify
       </button>
 
       <button @click="refreshAvailableUsers">

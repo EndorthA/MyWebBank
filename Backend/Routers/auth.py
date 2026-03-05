@@ -116,6 +116,48 @@ def get_current_admin(
     return token_data
 
 
+def get_current_user_or_admin(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+) -> TokenData:
+    """
+    Get the current authenticated actor (user or admin) from the token.
+    """
+    token = extract_token_from_header(authorization)
+
+    try:
+        token_data = verify_token(token)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(e),
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if token_data.user_type == "user":
+        user = crud.get_user(db, token_data.user_id)
+        if not user or user.is_deleted:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found or is deleted",
+            )
+        return token_data
+
+    if token_data.user_type == "admin":
+        admin = crud.get_admin(db, token_data.user_id)
+        if not admin or admin.is_deleted:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Admin not found or is deleted",
+            )
+        return token_data
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid user type",
+    )
+
+
 # ============================================================
 # Role-Based Access Control (RBAC) Dependencies
 # ============================================================

@@ -362,16 +362,18 @@ export async function transferByNames(fromName, recipientEmail, recipientAccount
   }
 }
 
-export async function fetchTransferRecipientEmails() {
+export async function fetchTransferRecipientEmails(options = {}) {
   const myEmail = String(currentUser.value?.email ?? '').trim()
   if (!myEmail) return { ok: false, message: 'User not logged in', items: [] }
+  const includeDeleted = options.includeDeleted === true
+  const includeSelf = options.includeSelf === true
 
   try {
     const { data } = await api.get('/users/')
     const items = (Array.isArray(data) ? data : [])
-      .filter((u) => u?.is_deleted !== true)
+      .filter((u) => includeDeleted || u?.is_deleted !== true)
       .map((u) => String(u?.email ?? '').trim())
-      .filter((email) => email && email !== myEmail)
+      .filter((email) => email && (includeSelf || email !== myEmail))
     return { ok: true, items }
   } catch (error) {
     return { ok: false, message: error?.response?.data?.detail || 'Could not load users', items: [] }

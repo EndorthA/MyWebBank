@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from .. import crud, schemas
 from ..crud import NotFoundError, BadRequestError, AuthError
-from .auth import get_current_user
+from .auth import get_current_admin, get_current_user_or_admin
 
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -15,6 +15,10 @@ router = APIRouter(prefix="/users", tags=["users"])
 class UserLoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+
+class UpdateUserStatusRequest(BaseModel):
+    status_value: str
 
 
 # ============================================================
@@ -47,7 +51,7 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
 # Get Current User
 # ============================================================
 @router.get("/", response_model=list[schemas.UserOut])
-def list_users(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def list_users(db: Session = Depends(get_db), current_user=Depends(get_current_user_or_admin)):
     users = crud.list_users(db)
     return [schemas.UserOut.model_validate(u) for u in users]
 # ============================================================
@@ -86,3 +90,22 @@ def deactivate_user(user_id: int, db: Session = Depends(get_db)):
         return user
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+# ============================================================
+# Update User Status
+# ============================================================
+@router.put("/{user_id}/status", response_model=schemas.UserOut)
+def update_user_status(
+    user_id: int,
+    data: UpdateUserStatusRequest,
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    try:
+        user = crud.update_user_status(db, user_id, data.status_value)
+        return user
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BadRequestError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

@@ -121,6 +121,23 @@ def deactivate_user(db: Session, user_id: int):
     return user
 
 
+def update_user_status(db: Session, user_id: int, status_value: str):
+    user = db.get(models.User, user_id)
+    if not user:
+        raise NotFoundError("User not found")
+
+    if status_value == "active":
+        user.is_deleted = False
+    elif status_value == "frozen":
+        user.is_deleted = True
+    else:
+        raise BadRequestError("Invalid status")
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 # ============================================================
 # Admins
 # ============================================================
