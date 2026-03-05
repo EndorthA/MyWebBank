@@ -215,6 +215,10 @@ def get_account(db: Session, account_id: int):
     return db.get(models.Account, account_id)
 
 
+def list_users(db: Session):
+    return list(db.execute(select(models.User)).scalars().all())
+
+
 def list_accounts_for_customer(db: Session, customer_id: int):
     return list(
         db.execute(

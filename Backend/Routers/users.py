@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from .. import crud, schemas
 from ..crud import NotFoundError, BadRequestError, AuthError
+from .auth import get_current_user
 
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -42,7 +43,13 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return user
 
-
+# ============================================================
+# Get Current User
+# ============================================================
+@router.get("/", response_model=list[schemas.UserOut])
+def list_users(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    users = crud.list_users(db)
+    return [schemas.UserOut.model_validate(u) for u in users]
 # ============================================================
 # Get User by Email
 # ============================================================

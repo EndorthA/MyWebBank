@@ -1,7 +1,7 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { accounts, currentUser, createBankAccount, prepareManageAccount, exitSession } from '../store.js'
+import { accounts, currentUser, createBankAccount, prepareManageAccount, exitSession, fetchMyAccounts } from '../store.js'
 
 const router = useRouter()
 
@@ -39,6 +39,11 @@ async function exitApp() {
   await exitSession()
   router.push('/')
 }
+
+onMounted(async () => {
+  await fetchMyAccounts()
+})
+
 </script>
 
 <template>

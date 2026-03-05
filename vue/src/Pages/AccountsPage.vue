@@ -4,7 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   accounts, users, currentUser, fetchMyAccounts, updateAccountStatusByName,
   depositByName, withdrawByName, transferByNames, fetchTransactionsByAccountName,
-  fetchLoansByAccountName, requestLoanByAccountName, payLoanByAccountName
+  fetchLoansByAccountName, requestLoanByAccountName, payLoanByAccountName,
+  fetchTransferRecipientEmails, fetchRecipientAccountNamesByEmail
 } from '../store.js'
 
 
@@ -218,18 +219,39 @@ async function payLoan() {
 const transferAmount = ref('')
 const recipientEmail = ref('')
 const recipientAccountName = ref('')
+const recipientEmails = ref([])
+const recipientAccountNames = ref([])
 
-const recipientEmails = computed(() => users.value.map(u => u.email))
+async function refreshRecipientEmails() {
+  const res = await fetchTransferRecipientEmails()
+  if (!res.ok) {
+    error.value = res.message
+    return
+  }
+  recipientEmails.value = res.items
+}
 
-watch(recipientEmail, () => { recipientAccountName.value = '' })
+async function refreshRecipientAccounts() {
+  if (!recipientEmail.value) {
+    recipientAccountNames.value = []
+    return
+  }
 
-// Only show accounts owned by selected recipient email
-const recipientAccountNames = computed(() => {
-  if (!recipientEmail.value) return []
-  return accounts.value
-    .filter(a => a.ownerEmail === recipientEmail.value)
-    .map(a => a.name)
+  const res = await fetchRecipientAccountNamesByEmail(recipientEmail.value)
+  if (!res.ok) {
+    error.value = res.message
+    recipientAccountNames.value = []
+    return
+  }
+  recipientAccountNames.value = res.items
+}
+
+watch(recipientEmail, async () => {
+  recipientAccountName.value = ''
+  await refreshRecipientAccounts()
 })
+
+
 
 async function doTransfer() {
   error.value = ''
@@ -269,6 +291,7 @@ function deleteAccount() {
 onMounted(async () => {
   await fetchMyAccounts()
   await refreshLoans()
+  await refreshRecipientEmails()
 })
 
 </script>

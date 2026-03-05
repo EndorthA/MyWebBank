@@ -348,6 +348,38 @@ export async function transferByNames(fromName, recipientEmail, recipientAccount
   }
 }
 
+export async function fetchTransferRecipientEmails() {
+  const myEmail = String(currentUser.value?.email ?? '').trim()
+  if (!myEmail) return { ok: false, message: 'User not logged in', items: [] }
+
+  try {
+    const { data } = await api.get('/users/')
+    const items = (Array.isArray(data) ? data : [])
+      .filter((u) => u?.is_deleted !== true)
+      .map((u) => String(u?.email ?? '').trim())
+      .filter((email) => email && email !== myEmail)
+    return { ok: true, items }
+  } catch (error) {
+    return { ok: false, message: error?.response?.data?.detail || 'Could not load users', items: [] }
+  }
+}
+
+export async function fetchRecipientAccountNamesByEmail(email) {
+  const toEmail = String(email ?? '').trim()
+  if (!toEmail) return { ok: false, message: 'Recipient email is required', items: [] }
+
+  try {
+    const { data: user } = await api.get(`/users/email/${encodeURIComponent(toEmail)}`)
+    const { data: recipientAccounts } = await api.get(`/accounts/customer/${user.customer_id}`)
+    const items = (Array.isArray(recipientAccounts) ? recipientAccounts : [])
+      .map((a) => String(a?.name ?? `Account ${a?.account_id}`))
+      .filter(Boolean)
+    return { ok: true, items }
+  } catch (error) {
+    return { ok: false, message: error?.response?.data?.detail || 'Could not load recipient accounts', items: [] }
+  }
+}
+
 export async function fetchTransactionsByAccountName(name) {
   const acc = findMyAccountByName(name)
   if (!acc?.accountId) return { ok: false, message: 'Account not found', items: [] }
@@ -592,6 +624,10 @@ export function resetAll() {
 }
 
 // -------------------- Persistence watchers --------------------
-watch(users, (v) => save('users', v), { deep: true })
-watch(accounts, (v) => save('accounts', v), { deep: true })
 watch(currentUser, (v) => save('currentUser', v), { deep: true })
+
+
+//watch(users, (v) => save('users', v), { deep: true })
+//watch(accounts, (v) => save('accounts', v), { deep: true })
+//watch(currentUser, (v) => save('currentUser', v), { deep: true })
+//Not needed if db is running^
