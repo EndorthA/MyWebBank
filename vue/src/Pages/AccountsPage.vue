@@ -1,7 +1,7 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { accounts, users, currentUser } from '../store.js'
+import { accounts, users, currentUser, fetchMyAccounts, updateAccountStatusByName, depositByName, withdrawByName, transferByNames, fetchTransactionsByAccountName } from '../store.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -22,6 +22,23 @@ const isLocked = computed(() => {
 const error = ref('')
 
 // ---------- Transaction ID + logging ----------
+const showLog = ref(false)
+const transactionLog = ref([])
+
+async function refreshTransactionLog() {
+  const res = await fetchTransactionsByAccountName(accountName)
+  if (!res.ok) {
+    error.value = res.message
+    return
+  }
+  transactionLog.value = res.items
+}
+
+async function toggleLog() {
+  showLog.value = !showLog.value
+  if (showLog.value) await refreshTransactionLog()
+}
+
 function emailNumber(ownerEmail) {
   const idx = users.value.findIndex(u => u.email === ownerEmail)
   return idx === -1 ? 0 : idx + 1
@@ -59,44 +76,72 @@ function addTransaction(type, amount, note = '') {
   })
 }
 
-const showLog = ref(false)
 
 // ---------- Close / Reopen ----------
-function closeAccount() {
+async function closeAccount() {
   if (!account.value) return
-  account.value.status = 'closed'
-  addTransaction('CLOSE_ACCOUNT', 0, 'Account closed')
+  error.value = ''
+
+  const res = await updateAccountStatusByName(accountName, 'closed')
+  if (!res.ok) {
+    error.value = res.message
+    return
+  }
 }
 
-function reopenAccount() {
+async function reopenAccount() {
   if (!account.value) return
-  account.value.status = 'open'
-  addTransaction('REOPEN_ACCOUNT', 0, 'Account reopened')
+  error.value = ''
+
+  const res = await updateAccountStatusByName(accountName, 'active')
+  if (!res.ok) {
+    error.value = res.message
+    return
+  }
 }
 
 // ---------- Add Money ----------
 const addMoneyAmount = ref('')
-function addMoney() {
+async function addMoney() {
   error.value = ''
   if (!account.value || isLocked.value) return
+
   const amt = Number(addMoneyAmount.value)
-  if (!Number.isFinite(amt) || amt <= 0) { error.value = 'Add money amount must be positive.'; return }
-  account.value.money += amt
+  if (!Number.isFinite(amt) || amt <= 0) {
+    error.value = 'Add money amount must be positive.'
+    return
+  }
+
+  const res = await depositByName(accountName, amt, account.value.currency)
+  if (!res.ok) {
+    error.value = res.message
+    return
+  }
+
   addMoneyAmount.value = ''
-  addTransaction('ADD_MONEY', amt)
+  if (showLog.value) await refreshTransactionLog()
 }
 
 // ---------- Withdraw ----------
 const withdrawAmount = ref('')
-function withdrawMoney() {
+async function withdrawMoney() {
   error.value = ''
   if (!account.value || isLocked.value) return
+
   const amt = Number(withdrawAmount.value)
-  if (!Number.isFinite(amt) || amt <= 0) { error.value = 'Withdrawal amount must be positive.'; return }
-  if (amt > account.value.money) { error.value = 'Cannot withdraw more than available money.'; return }
-  account.value.money -= amt
+  if (!Number.isFinite(amt) || amt <= 0) {
+    error.value = 'Withdrawal amount must be positive.'
+    return
+  }
+
+  const res = await withdrawByName(accountName, amt, account.value.currency)
+  if (!res.ok) {
+    error.value = res.message
+    return
+  }
+
   withdrawAmount.value = ''
-  addTransaction('WITHDRAW', amt)
+  if (showLog.value) await refreshTransactionLog()
 }
 
 // ---------- Loans ----------
@@ -158,7 +203,7 @@ const recipientAccountNames = computed(() => {
     .map(a => a.name)
 })
 
-function doTransfer() {
+async function doTransfer() {
   error.value = ''
   if (!account.value || isLocked.value) return
 
@@ -167,39 +212,21 @@ function doTransfer() {
   if (!recipientEmail.value) { error.value = 'Choose a recipient email.'; return }
   if (!recipientAccountName.value) { error.value = 'Choose a recipient account.'; return }
 
-  const recipientAcc = accounts.value.find(a =>
-    a.ownerEmail === recipientEmail.value && a.name === recipientAccountName.value
+  const res = await transferByNames(
+    accountName,
+    recipientEmail.value,
+    recipientAccountName.value,
+    amt
   )
-
-  if (!recipientAcc) { error.value = 'Recipient account not found.'; return }
-  if (account.value.money < amt) { error.value = 'Not enough money to transfer.'; return }
-
-  account.value.money -= amt
-  recipientAcc.money += amt
-
-  addTransaction('TRANSFER_OUT', amt, `To ${recipientEmail.value} / ${recipientAccountName.value}`)
-
-  // Add transaction to recipient too
-  const senderEmail = account.value.ownerEmail
-  const senderAccName = account.value.name
-  // Temporarily switch to push into recipient transaction log safely:
-  const originalAccount = account.value
-  // direct push without switching computed:
-  if (!Array.isArray(recipientAcc.transactions)) recipientAcc.transactions = []
-  const X = emailNumber(recipientAcc.ownerEmail)
-  const Y = accountNumber(recipientAcc.ownerEmail, recipientAcc.name)
-  const Z = (recipientAcc.transactions.length || 0) + 1
-  recipientAcc.transactions.push({
-    id: `${X}.${Y}.${Z}`,
-    type: 'TRANSFER_IN',
-    amount: amt,
-    note: `From ${senderEmail} / ${senderAccName}`,
-    ts: new Date().toISOString()
-  })
+  if (!res.ok) {
+    error.value = res.message
+    return
+  }
 
   transferAmount.value = ''
   recipientEmail.value = ''
   recipientAccountName.value = ''
+  if (showLog.value) await refreshTransactionLog()
 }
 
 // ---------- Navigation ----------
@@ -210,6 +237,11 @@ function deleteAccount() {
   if (idx !== -1) accounts.value.splice(idx, 1)
   router.push('/user')
 }
+
+onMounted(async () => {
+  await fetchMyAccounts()
+})
+
 </script>
 
 <template>
@@ -295,13 +327,13 @@ function deleteAccount() {
       <hr />
 
       <!-- Transaction Log -->
-      <button @click="showLog = !showLog">
+      <button @click="toggleLog">
         {{ showLog ? 'Hide Transaction Log' : 'Generate Transaction Log' }}
       </button>
 
       <div v-if="showLog" class="log-box">
-        <div v-if="!account.transactions.length">No transactions yet.</div>
-        <div v-for="t in account.transactions" :key="t.id" class="log-row">
+        <div v-if="!transactionLog.length">No transactions yet.</div>
+        <div v-for="t in transactionLog" :key="t.id" class="log-row">
           <div><strong>{{ t.id }}</strong> — {{ t.type }} — {{ t.amount }}</div>
           <div class="small">{{ t.note }}</div>
           <div class="small">{{ t.ts }}</div>

@@ -47,6 +47,8 @@ function normalizeAccounts(list) {
 
       return {
         name: String(a?.name ?? ''),
+        accountId: toNumber(a?.accountId ?? a?.account_id, 0),
+        customerId: toNumber(a?.customerId ?? a?.customer_id, 0),
         ownerEmail: String(a?.ownerEmail ?? 'user@test.com').trim(), // ✅ NEW
         currency: String(a?.currency ?? 'EUR'),
         money: toNumber(a?.money, 0),
@@ -193,6 +195,8 @@ export async function fetchMyAccounts() {
       const status = statusRaw === 'closed' || statusRaw === 'frozen' ? statusRaw : 'open'
       return {
         name: String(a?.name ?? `Account ${a.account_id}`),
+        accountId: toNumber(a?.account_id, 0),
+        customerId: toNumber(a?.customer_id, 0),
         ownerEmail,
         currency: String(a?.currency ?? 'EUR'),
         money: toNumber(a?.balance, 0),
@@ -241,6 +245,116 @@ export async function exitSession() {
     logout()
   }
   return { ok: true }
+}
+
+// Managed account functions
+function findMyAccountByName(name) {
+  const n = String(name ?? '').trim()
+  const ownerEmail = String(currentUser.value?.email ?? '').trim()
+  if (!n || !ownerEmail) return null
+
+  return accounts.value.find(
+    (a) => a.ownerEmail === ownerEmail && a.name === n
+  ) || null
+}
+
+
+export async function updateAccountStatusByName(name, statusValue) {
+  const acc = findMyAccountByName(name)
+  if (!acc?.accountId) return { ok: false, message: 'Account not found' }
+
+  try {
+    await api.put(`/accounts/${acc.accountId}/status`, { status_value: statusValue })
+    return await fetchMyAccounts()
+  } catch (error) {
+    return { ok: false, message: error?.response?.data?.detail || 'Could not update account status' }
+  }
+}
+
+export async function depositByName(name, amount, currency) {
+  const acc = findMyAccountByName(name)
+  const amt = Number(amount)
+  if (!acc?.accountId) return { ok: false, message: 'Account not found' }
+  if (!Number.isFinite(amt) || amt <= 0) return { ok: false, message: 'Amount must be positive' }
+
+  try {
+    await api.post(`/accounts/${acc.accountId}/deposit`, {
+      amount: amt,
+      currency: String(currency ?? acc.currency ?? 'EUR').toUpperCase(),
+    })
+    return await fetchMyAccounts()
+  } catch (error) {
+    return { ok: false, message: error?.response?.data?.detail || 'Could not deposit money' }
+  }
+}
+
+export async function withdrawByName(name, amount, currency) {
+  const acc = findMyAccountByName(name)
+  const amt = Number(amount)
+  if (!acc?.accountId) return { ok: false, message: 'Account not found' }
+  if (!Number.isFinite(amt) || amt <= 0) return { ok: false, message: 'Amount must be positive' }
+
+  try {
+    await api.post(`/accounts/${acc.accountId}/withdraw`, {
+      amount: amt,
+      currency: String(currency ?? acc.currency ?? 'EUR').toUpperCase(),
+    })
+    return await fetchMyAccounts()
+  } catch (error) {
+    return { ok: false, message: error?.response?.data?.detail || 'Could not withdraw money' }
+  }
+}
+
+export async function transferByNames(fromName, recipientEmail, recipientAccountName, amount) {
+  const from = findMyAccountByName(fromName)
+  const toEmail = String(recipientEmail ?? '').trim()
+  const toName = String(recipientAccountName ?? '').trim()
+  const amt = Number(amount)
+
+  if (!from?.accountId) return { ok: false, message: 'Sender account not found' }
+  if (!toEmail || !toName) return { ok: false, message: 'Recipient info is required' }
+  if (!Number.isFinite(amt) || amt <= 0) return { ok: false, message: 'Amount must be positive' }
+
+  try {
+    const { data: user } = await api.get(`/users/email/${encodeURIComponent(toEmail)}`)
+    const { data: recipientAccounts } = await api.get(`/accounts/customer/${user.customer_id}`)
+
+    const target = (Array.isArray(recipientAccounts) ? recipientAccounts : []).find(
+      (a) => String(a?.name ?? `Account ${a?.account_id}`) === toName
+    )
+    if (!target?.account_id) return { ok: false, message: 'Recipient account not found' }
+
+    await api.post('/transactions/', {
+      sender_account_id: from.accountId,
+      receiver_account_id: target.account_id,
+      amount: amt,
+      currency: String(from.currency ?? 'EUR').toUpperCase(),
+      comment: '',
+    })
+
+    return await fetchMyAccounts()
+  } catch (error) {
+    return { ok: false, message: error?.response?.data?.detail || 'Could not complete transfer' }
+  }
+}
+
+export async function fetchTransactionsByAccountName(name) {
+  const acc = findMyAccountByName(name)
+  if (!acc?.accountId) return { ok: false, message: 'Account not found', items: [] }
+
+  try {
+    const { data } = await api.get(`/transactions/account/${acc.accountId}`)
+    const items = (Array.isArray(data) ? data : []).map((t) => ({
+      id: String(t?.transaction_id ?? ''),
+      type: t?.sender_account_id === acc.accountId ? 'TRANSFER_OUT' : 'TRANSFER_IN',
+      amount: toNumber(t?.amount, 0),
+      note: String(t?.comment ?? ''),
+      ts: String(t?.created_at ?? ''),
+    }))
+    return { ok: true, items }
+  } catch (error) {
+    return { ok: false, message: error?.response?.data?.detail || 'Could not load transactions', items: [] }
+  }
 }
 
 
