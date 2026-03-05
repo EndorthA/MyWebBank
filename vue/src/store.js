@@ -90,9 +90,19 @@ export const accounts = ref(normalizeAccounts(load('accounts', DEFAULT_ACCOUNTS)
 export const currentUser = ref(load('currentUser', null)) // { email, role } | null
 
 // -------------------- User helpers --------------------
-export function findUserByEmail(email) {
+export async function findUserByEmail(email) {
   const e = String(email ?? '').trim()
-  return users.value.find((u) => u.email === e) || null
+  if (!e) return { ok: false, message: 'Email is required', user: null }
+
+  try {
+    const { data } = await api.get(`/users/email/${encodeURIComponent(e)}`)
+    return { ok: true, user: mapManagedUser(data) }
+  } catch (error) {
+    if (error?.response?.status === 404) {
+      return { ok: false, message: 'User not found.', user: null }
+    }
+    return { ok: false, message: error?.response?.data?.detail || 'Could not fetch user', user: null }
+  }
 }
 
 // -------------------- Auth --------------------
@@ -103,11 +113,10 @@ function mapApiUser(user) {
   }
 }
 
-export async function login(email, password) {
-  const e = String(email ?? '').trim()
+export async function login(identifier, password) {
+  const e = String(identifier ?? '').trim()
   const p = String(password ?? '')
-
-  if (!e || !p) return { ok: false, message: 'Email and password required' }
+  if (!e || !p) return { ok: false, message: 'Email/username and password required' }
 
   try {
     const { data } = await api.post('/auth/login', { email: e, password: p })
@@ -115,14 +124,19 @@ export async function login(email, password) {
     currentUser.value = { email: e, role: 'user' }
     await fetchMyAccounts()
     return { ok: true, role: 'user' }
+  } catch {}
+
+  try {
+    const { data } = await api.post('/auth/admin/login', { username: e, password: p })
+    localStorage.setItem('access_token', data.access_token)
+    currentUser.value = { email: e, role: 'admin' }
+    return { ok: true, role: 'admin' }
   } catch (error) {
     localStorage.removeItem('access_token')
-    return {
-      ok: false,
-      message: error?.response?.data?.detail || 'Invalid email or password',
-    }
+    return { ok: false, message: error?.response?.data?.detail || 'Invalid credentials' }
   }
 }
+
 
 export function loginAsTest(role) {
   const email = role === 'admin' ? 'admin@test.com' : 'user@test.com'
@@ -482,42 +496,80 @@ export async function payLoanByAccountName(name, loanId, amount) {
   }
 }
 
-
 // Admin-create user/admin accounts
-export function createAccountWithRole(email, password, role) {
+export async function createAccountWithRole(email, password, role) {
   const e = String(email ?? '').trim()
   const p = String(password ?? '')
+  const r = role === 'admin' ? 'admin' : 'user'
 
   if (!e || !p) return { ok: false, message: 'Email and password required' }
-  if (users.value.some((u) => u.email === e)) return { ok: false, message: 'Email already exists' }
 
-  const r = role === 'admin' ? 'admin' : 'user'
-  users.value.push({ email: e, password: p, role: r, status: 'active' })
-  return { ok: true }
+  try {
+    if (r === 'admin') {
+      const username = buildAdminUsername(e)
+      await api.post('/admins/', {
+        username,
+        email: e,
+        phone: null,
+        password: p,
+        role: 'admin',
+      })
+      return { ok: true, username }
+    }
+
+    const { afm, identificationNumber } = buildSyntheticIdentity()
+    return await registerUser({
+      email: e,
+      password: p,
+      phone: '',
+      identificationNumber,
+      afm,
+      address: '',
+      zipCode: '',
+      city: '',
+      citizenship: '',
+      name: '',
+    })
+  } catch (error) {
+    return { ok: false, message: error?.response?.data?.detail || 'Could not create account' }
+  }
 }
 
 // -------------------- Admin functions --------------------
-export function setUserStatus(email, status) {
-  const u = findUserByEmail(email)
-  if (!u) return { ok: false, message: 'User not found' }
-  if (status !== 'active' && status !== 'frozen') return { ok: false, message: 'Invalid status' }
+export async function setUserStatus(email, status) {
+  if (status !== 'active' && status !== 'frozen') {
+    return { ok: false, message: 'Invalid status' }
+  }
 
-  u.status = status
-  if (currentUser.value?.email === u.email && status === 'frozen') currentUser.value = null
-  return { ok: true }
+  const found = await findUserByEmail(email)
+  if (!found.ok || !found.user) return found
+
+  try {
+    if (status === 'frozen') {
+      await api.delete(`/users/${found.user.userId}`)
+      return { ok: true, user: { ...found.user, status: 'frozen', isDeleted: true } }
+    }
+
+    // Needs backend support (example: PUT /users/{id}/status)
+    await api.put(`/users/${found.user.userId}/status`, { status_value: 'active' })
+    const refreshed = await findUserByEmail(email)
+    return refreshed.ok ? { ok: true, user: refreshed.user } : refreshed
+  } catch (error) {
+    return { ok: false, message: error?.response?.data?.detail || 'Could not update user status' }
+  }
 }
 
-export function deleteUser(email) {
-  const e = String(email ?? '').trim()
-  const idx = users.value.findIndex((u) => u.email === e)
-  if (idx === -1) return { ok: false, message: 'User not found' }
+export async function deleteUser(email) {
+  const found = await findUserByEmail(email)
+  if (!found.ok || !found.user) return found
 
-  // delete their bank accounts too
-  accounts.value = accounts.value.filter(a => a.ownerEmail !== e)
-
-  if (currentUser.value?.email === e) currentUser.value = null
-  users.value.splice(idx, 1)
-  return { ok: true }
+  try {
+    await api.delete(`/users/${found.user.userId}`)
+    accounts.value = accounts.value.filter(a => a.ownerEmail !== found.user.email)
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, message: error?.response?.data?.detail || 'Could not delete user' }
+  }
 }
 
 export async function registerUser(profile) {
@@ -610,6 +662,30 @@ export async function registerUser(profile) {
       message: error?.response?.data?.detail || 'Could not create user',
     }
   }
+}
+function mapManagedUser(u) {
+  return {
+    userId: Number(u?.user_id ?? 0),
+    customerId: Number(u?.customer_id ?? 0),
+    email: String(u?.email ?? '').trim(),
+    role: u?.role === 'customer' ? 'user' : String(u?.role ?? 'user'),
+    status: u?.is_deleted ? 'frozen' : 'active',
+    isDeleted: Boolean(u?.is_deleted),
+  }
+}
+
+function buildAdminUsername(email) {
+  const local = String(email ?? '').split('@')[0] || 'admin'
+  const cleaned = local.toLowerCase().replace(/[^a-z0-9_]/g, '')
+  const base = cleaned.length >= 3 ? cleaned : `${cleaned}adm`
+  return base.slice(0, 50)
+}
+
+function buildSyntheticIdentity() {
+  const seed = `${Date.now()}${Math.floor(Math.random() * 1000)}`.replace(/\D/g, '')
+  const afm = seed.slice(-9).padStart(9, '0')
+  const identificationNumber = (`A${seed}`).slice(0, 10)
+  return { afm, identificationNumber }
 }
 
 // -------------------- Test reset --------------------

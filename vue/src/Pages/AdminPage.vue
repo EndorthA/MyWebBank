@@ -1,12 +1,13 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  logout,
+  exitSession,
   findUserByEmail,
   setUserStatus,
   deleteUser,
-  createAccountWithRole
+  createAccountWithRole,
+  fetchTransferRecipientEmails
 } from '../store.js'
 
 const router = useRouter()
@@ -14,22 +15,23 @@ const router = useRouter()
 // -------- Search (panel 1) --------
 const searchEmail = ref('')
 const searchError = ref('')
+const availableUsers = ref([])
 
 const showModal = ref(false)
 const selectedUser = ref(null)
 
-function openUser() {
+async function openUser() {
   searchError.value = ''
-  const u = findUserByEmail(searchEmail.value)
+  const res = await findUserByEmail(searchEmail.value)
 
-  if (!u) {
-    searchError.value = 'User not found.'
+  if (!res.ok || !res.user) {
+    searchError.value = res.message || 'User not found.'
     showModal.value = false
     selectedUser.value = null
     return
   }
 
-  selectedUser.value = u
+  selectedUser.value = res.user
   showModal.value = true
 }
 
@@ -37,20 +39,48 @@ function closeModal() {
   showModal.value = false
 }
 
-function freezeUser() {
-  if (!selectedUser.value) return
-  setUserStatus(selectedUser.value.email, 'frozen')
+async function refreshAvailableUsers() {
+  const res = await fetchTransferRecipientEmails()
+  if (!res.ok) {
+    searchError.value = res.message || 'Could not load users.'
+    availableUsers.value = []
+    return
+  }
+  availableUsers.value = res.items
 }
 
-function unfreezeUser() {
+async function freezeUser() {
   if (!selectedUser.value) return
-  setUserStatus(selectedUser.value.email, 'active')
+  searchError.value = ''
+  const res = await setUserStatus(selectedUser.value.email, 'frozen')
+  if (!res.ok) {
+    searchError.value = res.message
+    return
+  }
+  selectedUser.value = res.user ?? selectedUser.value
 }
 
-function removeUser() {
+async function unfreezeUser() {
   if (!selectedUser.value) return
-  deleteUser(selectedUser.value.email)
+  searchError.value = ''
+  const res = await setUserStatus(selectedUser.value.email, 'active')
+  if (!res.ok) {
+    searchError.value = res.message
+    return
+  }
+  selectedUser.value = res.user ?? selectedUser.value
+}
+
+async function removeUser() {
+  if (!selectedUser.value) return
+  searchError.value = ''
+  const res = await deleteUser(selectedUser.value.email)
+  if (!res.ok) {
+    searchError.value = res.message
+    return
+  }
   closeModal()
+  await refreshAvailableUsers()
 }
 
 // -------- Create account (panel 2) --------
@@ -60,26 +90,37 @@ const newRole = ref('user')
 const createError = ref('')
 const createSuccess = ref('')
 
-function createAccount() {
+async function createAccount() {
   createError.value = ''
   createSuccess.value = ''
 
-  const res = createAccountWithRole(newEmail.value, newPassword.value, newRole.value)
+  const createdEmail = String(newEmail.value).trim()
+  const createdRole = newRole.value
+  const res = await createAccountWithRole(newEmail.value, newPassword.value, newRole.value)
   if (!res.ok) {
     createError.value = res.message
     return
   }
 
-  createSuccess.value = `Created ${newRole.value} account: ${String(newEmail.value).trim()}`
+  if (createdRole === 'admin' && res.username) {
+    createSuccess.value = `Created admin account: ${createdEmail} (username: ${res.username})`
+  } else {
+    createSuccess.value = `Created ${createdRole} account: ${createdEmail}`
+  }
   newEmail.value = ''
   newPassword.value = ''
   newRole.value = 'user'
+  await refreshAvailableUsers()
 }
 
-function exitAdmin() {
-  logout()
+async function exitAdmin() {
+  await exitSession()
   router.push('/')
 }
+
+onMounted(async () => {
+  await refreshAvailableUsers()
+})
 </script>
 
 <template>
@@ -89,10 +130,17 @@ function exitAdmin() {
       <h1>Admin Panel</h1>
 
       <label>Search user by email</label>
-      <input v-model="searchEmail" type="email" placeholder="user@example.com" />
+      <select v-model="searchEmail">
+        <option disabled value="">Choose email</option>
+        <option v-for="e in availableUsers" :key="e" :value="e">{{ e }}</option>
+      </select>
 
       <button @click="openUser">
         Search
+      </button>
+
+      <button @click="refreshAvailableUsers">
+        Refresh Users
       </button>
 
       <p v-if="searchError" style="color:#d9534f; margin: 8px 0 0;">
@@ -187,4 +235,5 @@ function exitAdmin() {
   box-shadow: 0 6px 18px rgba(0,0,0,0.2);
   padding: 24px;
 }
+
 </style>

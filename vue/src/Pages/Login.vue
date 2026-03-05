@@ -47,7 +47,7 @@ function doReset() {
     <div class="card">
       <h1>Login</h1>
 
-      <input v-model="email" type="email" placeholder="Email" />
+      <input v-model="email" type="text" placeholder="Email or Username" />
       <input v-model="password" type="password" placeholder="Password" />
 
       <button @click="doLogin">Login</button>
