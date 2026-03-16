@@ -172,6 +172,7 @@ async function withdrawMoney() {
 const loanName = ref('')
 const loanAmount = ref('')
 const selectedLoanName = ref('')
+const repayAmount = ref('')
 
 const selectedLoan = computed(() => loans.value.find(l => l.name === selectedLoanName.value) || null)
 
@@ -203,14 +204,31 @@ async function payLoan() {
   error.value = ''
   if (!account.value || !selectedLoan.value || isLocked.value) return
 
-  const payAmount = Number(selectedLoan.value.amount)
-  const loanLabel = selectedLoan.value.name  
-  const res = await payLoanByAccountName(accountName, selectedLoan.value.loanId, selectedLoan.value.amount)
+  const amt = Number(repayAmount.value)
+  const remaining = Number(selectedLoan.value.amount)
+
+  if (!Number.isFinite(amt) || amt <= 0) {
+    error.value = 'Repayment amount must be positive.'
+    return
+  }
+
+  if (amt > account.value.money) {
+    error.value = 'Not enough money in account.'
+    return
+  }
+
+  if (amt > remaining) {
+    error.value = 'Repayment amount cannot be more than the loan remaining.'
+    return
+  }
+
+  const res = await payLoanByAccountName(accountName, selectedLoan.value.loanId, amt)
   if (!res.ok) { error.value = res.message; return }
 
-  addTransaction('LOAN PAID', payAmount, `Loan: ${loanLabel}`)
+  addTransaction('LOAN_PAYMENT', amt, `Loan: ${selectedLoanName.value}`)
 
   await refreshLoans()
+  repayAmount.value = ''
   if (showLog.value) await refreshTransactionLog()
 }
 
@@ -366,13 +384,25 @@ onMounted(async () => {
       <label>Loans</label>
       <select v-model="selectedLoanName" :disabled="isLocked">
         <option disabled value="">Choose a loan</option>
-        <option v-for="loan in loans" :key="loan.loanId" :value="loan.name">{{ loan.name }}</option>
+        <option
+          v-for="loan in loans"
+          :key="loan.loanId"
+          :value="loan.name"
+        >
+          {{ loan.name }}
+        </option>
       </select>
 
       <div class="info-box" v-if="selectedLoan">
         <strong>Loan amount remaining:</strong>
         <div class="amount">{{ loanRemaining }}</div>
       </div>
+
+      <input
+        v-model="repayAmount"
+        :disabled="isLocked || !selectedLoan"
+        placeholder="Repayment Amount"
+      />
 
       <button @click="payLoan" :disabled="isLocked || !selectedLoan">Pay Loan</button>
 
