@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { login, loginAsTest, resetAll } from '../store.js'
+import { loginUser, loginAdmin, loginAsTest, resetAll } from '../store.js'
 
 const router = useRouter()
 
@@ -9,14 +9,24 @@ const email = ref('')
 const password = ref('')
 const error = ref('')
 
-async function doLogin() {
+async function doUserLogin() {
   error.value = ''
-  const res = await login(email.value.trim(), password.value)
+  const res = await loginUser(email.value.trim(), password.value)
   if (!res.ok) {
     error.value = res.message
     return
   }
-  router.push(res.role === 'admin' ? '/admin' : '/user')
+  router.push('/user')
+}
+
+async function doAdminLogin() {
+  error.value = ''
+  const res = await loginAdmin(email.value.trim(), password.value)
+  if (!res.ok) {
+    error.value = res.message
+    return
+  }
+  router.push('/admin')
 }
 
 
@@ -50,7 +60,8 @@ function doReset() {
       <input v-model="email" type="text" placeholder="Email or Username" />
       <input v-model="password" type="password" placeholder="Password" />
 
-      <button @click="doLogin">Login</button>
+      <button @click="doUserLogin">Login as User</button>
+      <button @click="doAdminLogin">Login as Admin</button>
 
       <!-- NEW: replace previous method -->
       <button @click="goRegister">Create Account</button>

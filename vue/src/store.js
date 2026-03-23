@@ -113,7 +113,7 @@ function mapApiUser(user) {
   }
 }
 
-export async function login(identifier, password) {
+export async function loginUser(identifier, password) {
   const e = String(identifier ?? '').trim()
   const p = String(password ?? '')
   if (!e || !p) return { ok: false, message: 'Email/username and password required' }
@@ -124,7 +124,16 @@ export async function login(identifier, password) {
     currentUser.value = { email: e, role: 'user' }
     await fetchMyAccounts()
     return { ok: true, role: 'user' }
-  } catch {}
+  } catch (error) {
+    localStorage.removeItem('access_token')
+    return { ok: false, message: error?.response?.data?.detail || 'Invalid user credentials' }
+  }
+}
+
+export async function loginAdmin(identifier, password) {
+  const e = String(identifier ?? '').trim()
+  const p = String(password ?? '')
+  if (!e || !p) return { ok: false, message: 'Email/username and password required' }
 
   try {
     const { data } = await api.post('/auth/admin/login', { username: e, password: p })
@@ -133,7 +142,7 @@ export async function login(identifier, password) {
     return { ok: true, role: 'admin' }
   } catch (error) {
     localStorage.removeItem('access_token')
-    return { ok: false, message: error?.response?.data?.detail || 'Invalid credentials' }
+    return { ok: false, message: error?.response?.data?.detail || 'Invalid admin credentials' }
   }
 }
 
